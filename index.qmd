@@ -27,7 +27,9 @@ self-contained interactive HTML widgets.
 
 :::{.eco-card}
 [![](assets/logos/vellum.png){fig-alt="vellum hex logo"}](https://r-vellum.github.io/vellum/)
+
 ### vellum
+
 [the parchment]{.role}
 
 A grid-like low-level graphics system whose scene graph, layout engine, and
@@ -36,7 +38,9 @@ PNG/SVG/PDF rendering all run in a Rust backend.
 
 :::{.eco-card}
 [![](assets/logos/vellumplot.png){fig-alt="vellumplot hex logo"}](https://r-vellum.github.io/vellumplot/)
+
 ### vellumplot
+
 [the pen]{.role}
 
 A declarative, pipe-first grammar of graphics that compiles an inspectable
@@ -45,7 +49,9 @@ plot spec into a vellum scene.
 
 :::{.eco-card}
 [![](assets/logos/vellumwidget.png){fig-alt="vellumwidget hex logo"}](https://r-vellum.github.io/vellumwidget/)
+
 ### vellumwidget
+
 [the annotation]{.role}
 
 Turns any vellum scene into a self-contained, client-side interactive HTML
@@ -54,7 +60,9 @@ widget — hover, select, brush, zoom. No Shiny, no server.
 
 :::{.eco-card}
 [![](assets/logos/vellumverse.png){fig-alt="vellumverse hex logo"}](https://r-vellum.github.io/vellumverse/)
+
 ### vellumverse
+
 [the meta-package]{.role}
 
 Installs and loads the whole ecosystem together, in the spirit of the
