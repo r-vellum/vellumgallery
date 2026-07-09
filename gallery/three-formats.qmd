@@ -1,6 +1,6 @@
 ---
 title: "One scene, three formats"
-description: "The same vellum scene rendered to PNG, SVG and PDF — identical geometry from one Rust-backed backend."
+description: "The same vellum scene rendered to PNG, SVG, and PDF, with identical geometry from one Rust-backed backend."
 categories: [Backend]
 image: figs/three-formats.png
 ---
@@ -13,7 +13,7 @@ suppressMessages(library(vellum))
 This is the layer beneath the grammar. A **vellum** scene is described once with
 low-level grobs, then compiled and rendered by the Rust backend. The *same*
 scene renders to a raster (PNG), a vector (SVG), or a print-ready document (PDF)
-with consistent geometry and text shaping — no per-format fiddling.
+with consistent geometry and text shaping, and no per-format fiddling.
 
 ```{r}
 scene <- vl_scene(width = 6, height = 3, bg = "#faf5ea") |>
@@ -31,14 +31,14 @@ scene <- vl_scene(width = 6, height = 3, bg = "#faf5ea") |>
   ))
 ```
 
-One scene value, three calls to `render()` — the output format follows the file
+One scene value, three calls to `render()`. The output format follows the file
 extension:
 
 ```{r}
 #| eval: false
-render(scene, "vellum-logo.png")   # raster  — tiny-skia
-render(scene, "vellum-logo.svg")   # vector  — hand-rolled SVG writer
-render(scene, "vellum-logo.pdf")   # print   — krilla
+render(scene, "vellum-logo.png")   # raster  (tiny-skia)
+render(scene, "vellum-logo.svg")   # vector  (hand-rolled SVG writer)
+render(scene, "vellum-logo.pdf")   # print   (krilla)
 ```
 
 ```{r}
@@ -62,7 +62,7 @@ scene graph and one layout solve. Grab any of the three:
 [Download SVG](figs/three-formats.svg){.btn .btn-primary .btn-sm download="vellum-logo.svg"}
 [Download PDF](figs/three-formats.pdf){.btn .btn-primary .btn-sm download="vellum-logo.pdf"}
 
-Because rendering is deterministic, the bytes are stable across platforms — which
+Because rendering is deterministic, the bytes are stable across platforms, which
 is what makes vellum graphics snapshot-testable. This retained scene graph is
 also what [vellumplot](https://r-vellum.github.io/vellumplot/) compiles into, and
 what [vellumwidget](https://r-vellum.github.io/vellumwidget/) reads to wire up

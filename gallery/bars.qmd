@@ -1,6 +1,6 @@
 ---
 title: "Bar chart with a count stat"
-description: "A bar mark that counts rows per category — the count stat with no y supplied."
+description: "A bar mark that counts rows per category: the count stat, used when no y is supplied."
 categories: [Basics]
 ---
 

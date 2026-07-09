@@ -13,34 +13,34 @@ the page.*
 
 | Package | Role | Analogue |
 |---|---|---|
-| [**vellum**](https://r-vellum.github.io/vellum/) | Low-level graphics backend — a retained scene graph, a unit/layout engine, and PNG/SVG/PDF rendering, all running in a Rust engine. | `grid` |
+| [**vellum**](https://r-vellum.github.io/vellum/) | Low-level graphics backend: a retained scene graph, a unit/layout engine, and PNG/SVG/PDF rendering, all running in a Rust engine. | `grid` |
 | [**vellumplot**](https://r-vellum.github.io/vellumplot/) | A declarative, pipe-first grammar of graphics that compiles an inspectable plot spec into a vellum scene. | `ggplot2` |
-| [**vellumwidget**](https://r-vellum.github.io/vellumwidget/) | Client-side interactive HTML widgets built from a vellum scene — hover, select, brush, zoom. No Shiny, no server. | `plotly` / `htmlwidgets` |
+| [**vellumwidget**](https://r-vellum.github.io/vellumwidget/) | Client-side interactive HTML widgets built from a vellum scene: hover, select, brush, and zoom, with no server. | `plotly` / `htmlwidgets` |
 | [**vellumverse**](https://r-vellum.github.io/vellumverse/) | A meta-package that installs and loads the whole ecosystem together. | `tidyverse` |
 
 ## What makes it different
 
-- **A Rust backend.** The scene graph, layout solver, and renderers (raster,
-  SVG, PDF) live in Rust via extendr. Output is deterministic and
-  byte-stable across platforms — snapshot-testable graphics.
-- **One scene, three formats.** The same scene renders identically to PNG, SVG,
-  or PDF; geometry and text shaping stay consistent.
-- **A real compiler, not a wrapper.** A vellumplot plot is a serializable spec.
-  Nothing is drawn until it compiles: encodings resolve, scales train, the
-  panel layout is measured, and guides and marks are emitted as vellum grobs.
-- **A retained scene graph.** Because the scene is retained rather than drawn
-  immediate-mode, elements carry data keys and bounding boxes — which is exactly
-  what vellumwidget needs to wire up interactivity in the browser.
-- **A modern paint model.** Gradients, tiling patterns, alpha/luminance masks,
-  group opacity, and blend modes; plus built-in big-data aggregation with
-  `datashade()` and hand-drawn ("sketch") rendering.
+vellum's scene graph, layout solver, and renderers (raster, SVG, PDF) run in
+Rust through extendr. The rendering is deterministic, so the same scene produces
+byte-identical output across platforms and graphics can be snapshot-tested. That
+one scene renders to PNG, SVG, or PDF with the same geometry and text shaping.
+
+A vellumplot plot is a serializable spec, not a picture. Nothing is drawn until
+it compiles: encodings resolve, scales train, the panel layout is measured, and
+guides and marks become vellum grobs. The scene it produces is retained rather
+than drawn immediate-mode, so every element keeps a data key and a bounding box.
+That is what vellumwidget reads to wire up interactivity in the browser.
+
+The paint model covers gradients, tiling patterns, alpha and luminance masks,
+group opacity, and blend modes. Large point clouds go through built-in
+aggregation with `datashade()`, and `sketch()` gives a hand-drawn look.
 
 ## Pipe-first, ggplot2-adjacent
 
-If you know ggplot2 the vocabulary will feel familiar — `mark_point()`,
-`scale_color_continuous()`, `facet_wrap()`, `theme_minimal()` — but plots are
+If you know ggplot2 the vocabulary will feel familiar (`mark_point()`,
+`scale_color_continuous()`, `facet_wrap()`, `theme_minimal()`), but plots are
 composed with the native pipe `|>` rather than `+`, and aesthetics are plain
-named arguments on each mark (no `aes()`):
+named arguments on each mark, with no `aes()`:
 
 ```r
 library(vellumplot)
@@ -52,10 +52,10 @@ vplot(mtcars) |>
 
 ## About this gallery
 
-Every example on this site is real, runnable code — rendered by vellumplot on
-the vellum backend and frozen into the site so the deployment never needs to
+Every example on this site is real, runnable code, rendered by vellumplot on
+the vellum backend and frozen into the site so the deployment never has to
 rebuild the Rust engine. The site is built with [Quarto](https://quarto.org)
-and styled to match the ecosystem's pkgdown pages (a parchment / sepia palette,
-set in Spectral).
+and styled to match the ecosystem's pkgdown pages (a parchment and sepia
+palette, set in Spectral).
 
 Source lives at [r-vellum/vellumgallery](https://github.com/r-vellum/vellumgallery).

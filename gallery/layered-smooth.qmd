@@ -1,6 +1,6 @@
 ---
 title: "Layered marks: points and a smooth"
-description: "Two marks over the same data — a scatter and a linear smooth with a confidence band."
+description: "Two marks over the same data: a scatter and a linear smooth with a confidence band."
 categories: [Basics]
 ---
 

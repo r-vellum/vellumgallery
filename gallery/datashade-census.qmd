@@ -1,12 +1,12 @@
 ---
 title: "The US Census, all 306 million points"
-description: "Datashading the full 2010 US Census — population density, and an additive per-race composite — reproducing the classic datashader example."
+description: "Datashading the full 2010 US Census (population density and an additive per-race composite), reproducing the classic datashader example."
 categories: [Big data]
 image: figs/census-thumb.png
 ---
 
-This is the showcase for `mark_datashade()`: one point per person from the 2010
-US Census — about **306 million rows** — rendered as a map. It reproduces
+The showcase for `mark_datashade()`: one point per person from the 2010 US
+Census, about **306 million rows**, rendered as a map. It reproduces
 [datashader's census example](https://examples.holoviz.org/gallery/census/census.html)
 with vellumplot.
 
@@ -21,10 +21,10 @@ in vellumplot).
 
 ## Population density
 
-Every person, coloured by local density on a single ramp — the classic "where
+Every person, coloured by local density on a single ramp: the classic "where
 do people live" map. `how = "eq_hist"` (histogram equalisation) spreads the
-enormous dynamic range across the colour ramp so both empty plains and dense
-cities stay legible.
+wide dynamic range across the colour ramp so both empty plains and dense cities
+stay legible.
 
 ![US population density (2010 Census, ~306M points)](figs/census-density.png){fig-alt="Datashaded map of US population density from the 2010 census, ~306 million points, on a black-to-white heat ramp"}
 

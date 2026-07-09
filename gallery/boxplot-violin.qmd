@@ -1,6 +1,6 @@
 ---
 title: "Boxplots and violins"
-description: "Two views of the same grouped distribution — a boxplot and a violin, side by side."
+description: "Two views of the same grouped distribution: a boxplot and a violin, side by side."
 categories: [Statistical]
 ---
 

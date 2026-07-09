@@ -1,6 +1,6 @@
 ---
 title: "Gallery"
-description: "Plots and interactive widgets built with the vellum ecosystem — every example is real, runnable code."
+description: "Plots and interactive widgets built with the vellum ecosystem. Every example is real, runnable code."
 listing:
   id: gallery-listing
   contents: "*.qmd"

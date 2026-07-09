@@ -1,6 +1,6 @@
 ---
 title: "Lollipop chart"
-description: "A lollipop built from primitives — a segment mark for the stems and a point mark for the heads."
+description: "A lollipop built from primitives: a segment mark for the stems and a point mark for the heads."
 categories: [Basics]
 ---
 

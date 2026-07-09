@@ -47,13 +47,13 @@ website:
     right:
       - text: "Ecosystem"
         menu:
-          - text: "vellum — the backend"
+          - text: "vellum (the backend)"
             href: "https://r-vellum.github.io/vellum/"
-          - text: "vellumplot — the grammar"
+          - text: "vellumplot (the grammar)"
             href: "https://r-vellum.github.io/vellumplot/"
-          - text: "vellumwidget — interactive"
+          - text: "vellumwidget (interactive)"
             href: "https://r-vellum.github.io/vellumwidget/"
-          - text: "vellumverse — the meta-package"
+          - text: "vellumverse (the meta-package)"
             href: "https://r-vellum.github.io/vellumverse/"
       - icon: github
         href: "https://github.com/r-vellum/vellumgallery"

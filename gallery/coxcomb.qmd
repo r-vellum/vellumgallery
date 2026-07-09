@@ -1,6 +1,6 @@
 ---
 title: "Coxcomb (polar bars)"
-description: "Bars mapped into polar space — a Nightingale-style coxcomb via coord_polar()."
+description: "Bars mapped into polar space: a Nightingale-style coxcomb via coord_polar()."
 categories: [Polar]
 ---
 

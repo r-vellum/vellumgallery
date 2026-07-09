@@ -1,6 +1,6 @@
 ---
 title: "Faceting"
-description: "Small multiples — one panel per level of a grouping variable with facet_wrap()."
+description: "Small multiples: one panel per level of a grouping variable with facet_wrap()."
 categories: [Composition]
 ---
 

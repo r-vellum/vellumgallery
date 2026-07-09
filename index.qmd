@@ -1,6 +1,6 @@
 ---
 pagetitle: "vellum gallery"
-description: "A gallery for the vellum graphics ecosystem in R — a Rust-backed backend, a pipe-first grammar of graphics, and client-side interactive widgets."
+description: "A gallery for the vellum graphics ecosystem in R: a Rust-backed rendering backend, a pipe-first grammar of graphics, and client-side interactive widgets."
 toc: false
 page-layout: full
 ---
@@ -18,7 +18,7 @@ A showcase of what you can draw with the **vellum** graphics ecosystem in R:
 a Rust-backed rendering backend, a pipe-first grammar of graphics, and
 self-contained interactive HTML widgets.
 
-[Browse the gallery →](gallery/index.qmd){.btn .btn-primary .btn-lg}
+[Browse the gallery](gallery/index.qmd){.btn .btn-primary .btn-lg}
 ::::
 
 ## The ecosystem
@@ -54,8 +54,8 @@ plot spec into a vellum scene.
 
 [the annotation]{.role}
 
-Turns any vellum scene into a self-contained, client-side interactive HTML
-widget — hover, select, brush, zoom. No Shiny, no server.
+Turns any vellum scene into a self-contained interactive HTML widget you can
+hover, select, brush, and zoom, all in the browser with no server.
 :::
 
 :::{.eco-card}
@@ -73,7 +73,7 @@ tidyverse.
 
 ## A taste
 
-One data frame, a couple of marks, a trained scale — that is a whole plot.
+A data frame, a few marks, and a trained scale make a whole plot.
 
 ```{r}
 #| include: false
@@ -106,4 +106,4 @@ p <- vplot(mtcars, width = 7, height = 4.2) |>
 vg(p, "home-taste")
 ```
 
-Ready to explore? [Head to the gallery.](gallery/index.qmd)
+See the rest in the [gallery](gallery/index.qmd).

@@ -10,8 +10,8 @@ source("_helper.R")
 ```
 
 vellumplot composes finished plots the way patchwork does, but with functions
-instead of operators. A `design` string lays panels out on a grid — here one
-wide scatter on top (`A`) and two panels below (`B`, `C`).
+instead of operators. A `design` string lays panels out on a grid; here one
+wide scatter sits on top (`A`) and two panels below (`B`, `C`).
 
 ```{r}
 peng <- na.omit(datasets::penguins)

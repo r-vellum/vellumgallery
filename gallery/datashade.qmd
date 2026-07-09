@@ -11,7 +11,7 @@ source("_helper.R")
 
 A scatter of a million points is just ink. `mark_datashade()` uses vellum's
 built-in datashader-style fast path: aggregate points into a pixel grid, then
-shade by density — so the picture scales with the canvas, not the data.
+shade by density, so the picture scales with the canvas, not the data.
 
 ```{r}
 set.seed(1)

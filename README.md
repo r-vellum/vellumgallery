@@ -1,7 +1,7 @@
 # vellum gallery
 
 A [Quarto](https://quarto.org) gallery for the **vellum** graphics ecosystem in
-R — a Rust-backed rendering backend
+R: a Rust-backed rendering backend
 ([vellum](https://github.com/r-vellum/vellum)), a pipe-first grammar of graphics
 ([vellumplot](https://github.com/r-vellum/vellumplot)), client-side interactive
 widgets ([vellumwidget](https://github.com/r-vellum/vellumwidget)), and a
@@ -16,7 +16,7 @@ Live site: <https://r-vellum.github.io/vellumgallery/>
 ## Structure
 
 ```
-index.qmd            Home — hero, ecosystem overview, a taste plot
+index.qmd            Home: hero, ecosystem overview, a taste plot
 about.qmd            What vellum is and how the pieces fit together
 gallery/
   index.qmd          A filterable grid listing of every example
@@ -48,8 +48,8 @@ quarto preview         # live preview while editing
 
 Every computational result is **frozen** into `_freeze/` (`execute: freeze:
 auto` in `_quarto.yml`). The GitHub Actions workflow
-(`.github/workflows/publish.yml`) therefore only installs Quarto — no R, no
-Rust, no vellum packages — reuses the frozen output when it renders, and
+(`.github/workflows/publish.yml`) therefore installs only Quarto, with no R,
+Rust, or vellum packages. It reuses the frozen output when it renders, then
 deploys `_site/` to GitHub Pages via the Pages Actions pipeline (Pages source:
 *GitHub Actions*).
 

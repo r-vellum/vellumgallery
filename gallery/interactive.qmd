@@ -1,6 +1,6 @@
 ---
 title: "Interactive widget"
-description: "Any vellumplot becomes a client-side interactive widget — hover, select, brush, zoom — with as_widget()."
+description: "Any vellumplot becomes a client-side interactive widget with as_widget(): hover, select, brush, and zoom."
 categories: [Interactive]
 image: figs/interactive.png
 ---
@@ -17,7 +17,7 @@ render_plot(prev, "figs/interactive.png", dpi = 150)
 
 Pipe any vellumplot into `as_widget()` and it becomes a self-contained HTML
 widget: hover a point for a tooltip, click to select, drag a rectangle to brush,
-scroll to zoom. It runs entirely in the browser — no Shiny, no server.
+scroll to zoom. It runs entirely in the browser, with no server.
 
 Declare `tooltip` and `data_id` on the mark to give each point a label and a
 stable key for interactions.
@@ -30,7 +30,7 @@ vplot(df) |>
   as_widget()
 ```
 
-Colour maps to a discrete variable get an interactive legend for free — hover a
+Colour maps to a discrete variable get an interactive legend for free: hover a
 swatch to highlight its series, click to select it.
 
 ```{r}
