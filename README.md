@@ -49,8 +49,9 @@ quarto preview         # live preview while editing
 Every computational result is **frozen** into `_freeze/` (`execute: freeze:
 auto` in `_quarto.yml`). The GitHub Actions workflow
 (`.github/workflows/publish.yml`) therefore only installs Quarto — no R, no
-Rust, no vellum packages — and reuses the frozen output when it renders and
-pushes to the `gh-pages` branch.
+Rust, no vellum packages — reuses the frozen output when it renders, and
+deploys `_site/` to GitHub Pages via the Pages Actions pipeline (Pages source:
+*GitHub Actions*).
 
 **This means: after editing any R chunk, re-render locally and commit the
 refreshed `_freeze/` directory** (and any changed images under `gallery/figs/`
