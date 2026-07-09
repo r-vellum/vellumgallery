@@ -66,7 +66,10 @@ website:
 format:
   html:
     theme:
-      - theme/vellum.scss
+      light:
+        - theme/vellum.scss
+      dark:
+        - theme/vellum-dark.scss
     toc: true
     toc-title: "On this page"
     include-in-header:

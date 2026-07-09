@@ -1,0 +1,128 @@
+/*-- scss:defaults --*/
+// vellum gallery — dark variant. "Aged ink" rather than "aged paper": a warm
+// near-black brown with parchment-coloured text, keeping the sepia accents.
+
+$vellum-bg:        #17120b;   // dark ink-brown
+$vellum-fg:        #ece3d0;   // warm parchment text
+$vellum-primary:   #c9a874;   // warm gold/tan
+$vellum-secondary: #a98f68;   // muted tan
+$vellum-navbar-bg: #211a10;   // slightly lifted panel
+$vellum-brand:     #e6d3a8;   // pale gold
+$vellum-link:      #d8b784;   // warm gold link
+$vellum-code-bg:   #221b11;   // panel
+$vellum-rule:      #3a2f1e;   // hairline rule
+
+$font-family-sans-serif: "Spectral", Georgia, "Times New Roman", serif !default;
+$font-family-serif:      "Spectral", Georgia, serif !default;
+$font-family-monospace:  "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace !default;
+$headings-font-family:   "Spectral SC", "Spectral", Georgia, serif !default;
+
+$body-bg:    $vellum-bg;
+$body-color: $vellum-fg;
+$primary:    $vellum-primary;
+$secondary:  $vellum-secondary;
+$link-color: $vellum-link;
+$border-radius: 0.5rem;
+
+$code-color:          #e0b98a;
+$code-bg:             $vellum-code-bg;
+$navbar-bg:           $vellum-navbar-bg;
+$navbar-dark-bg:      $vellum-navbar-bg;
+$navbar-fg:           $vellum-brand;
+
+/*-- scss:rules --*/
+
+// A faint warm wash, dialled down for the dark canvas.
+body {
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(201, 168, 116, 0.06), transparent 55%),
+    radial-gradient(circle at 85% 8%, rgba(201, 168, 116, 0.05), transparent 50%);
+  background-attachment: fixed;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: "Spectral SC", "Spectral", Georgia, serif;
+  letter-spacing: 0.01em;
+  color: $vellum-brand;
+}
+h1, h2 {
+  border-bottom: 1px solid $vellum-rule;
+  padding-bottom: 0.25rem;
+}
+
+pre {
+  border: 1px solid $vellum-rule;
+  border-radius: $border-radius;
+  background-color: $vellum-code-bg;
+}
+code {
+  background-color: $vellum-code-bg;
+}
+
+.navbar {
+  border-bottom: 1px solid $vellum-rule;
+}
+.navbar-brand img {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
+// Hero.
+.vellum-hero {
+  text-align: center;
+  padding: 2.5rem 1rem 1.5rem;
+}
+.vellum-hero img.logo {
+  width: 180px;
+  height: auto;
+  filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.6));
+}
+.vellum-hero .tagline {
+  font-size: 1.35rem;
+  color: $vellum-secondary;
+  margin-top: 0.75rem;
+  font-style: italic;
+}
+
+// Ecosystem / gallery cards.
+.eco-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.25rem;
+  margin: 2rem 0;
+}
+.eco-card {
+  border: 1px solid $vellum-rule;
+  border-radius: $border-radius;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1.25rem;
+  text-align: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.eco-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+.eco-card img {
+  width: 96px;
+  height: auto;
+  margin-bottom: 0.5rem;
+}
+.eco-card h3 {
+  border: none;
+  margin: 0.25rem 0;
+  font-size: 1.15rem;
+}
+.eco-card .role {
+  color: $vellum-secondary;
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.quarto-grid-item.card {
+  border: 1px solid $vellum-rule;
+  border-radius: $border-radius;
+  background: rgba(255, 255, 255, 0.03);
+}
+.quarto-grid-item.card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}

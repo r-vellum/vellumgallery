@@ -17,3 +17,6 @@ Thumbs.db
 
 # Claude Code local state
 .claude/
+
+/.quarto/
+**/*.quarto_ipynb
