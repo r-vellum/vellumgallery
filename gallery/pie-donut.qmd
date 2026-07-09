@@ -1,0 +1,33 @@
+---
+title: "Pie and donut"
+description: "The same category counts as a pie and as a donut, with a configurable hole."
+categories: [Polar]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+`mark_pie()` and `mark_donut()` take a `value` and a `fill`. A donut is a pie
+with a `hole`.
+
+```{r}
+peng <- na.omit(datasets::penguins)
+counts <- as.data.frame(table(species = peng$species))
+
+pie <- vplot(counts) |>
+  mark_pie(value = Freq, fill = species) |>
+  labs(title = "Pie")
+
+donut <- vplot(counts) |>
+  mark_donut(value = Freq, fill = species, hole = 0.6) |>
+  labs(title = "Donut")
+
+p <- hconcat(pie, donut)
+```
+
+```{r}
+#| echo: false
+vg(p, "pie-donut")
+```

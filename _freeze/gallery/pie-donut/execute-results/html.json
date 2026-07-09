@@ -1,0 +1,15 @@
+{
+  "hash": "71ef41f5636d2d4c2b4665b26bfbf483",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Pie and donut\"\ndescription: \"The same category counts as a pie and as a donut, with a configurable hole.\"\ncategories: [Polar]\n---\n\n\n\n`mark_pie()` and `mark_donut()` take a `value` and a `fill`. A donut is a pie\nwith a `hole`.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npeng <- na.omit(datasets::penguins)\ncounts <- as.data.frame(table(species = peng$species))\n\npie <- vplot(counts) |>\n  mark_pie(value = Freq, fill = species) |>\n  labs(title = \"Pie\")\n\ndonut <- vplot(counts) |>\n  mark_donut(value = Freq, fill = species, hole = 0.6) |>\n  labs(title = \"Donut\")\n\np <- hconcat(pie, donut)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/pie-donut.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

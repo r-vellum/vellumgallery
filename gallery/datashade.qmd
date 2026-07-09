@@ -1,0 +1,29 @@
+---
+title: "Datashading a million points"
+description: "Aggregate-then-shade rendering that stays fast and legible at a million points."
+categories: [Big data]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+A scatter of a million points is just ink. `mark_datashade()` uses vellum's
+built-in datashader-style fast path: aggregate points into a pixel grid, then
+shade by density — so the picture scales with the canvas, not the data.
+
+```{r}
+set.seed(1)
+n <- 1e6
+df <- data.frame(x = rnorm(n), y = rnorm(n) + rnorm(n, 0, 0.4))
+
+p <- vplot(df) |>
+  mark_datashade(x = x, y = y) |>
+  labs(title = "One million points, datashaded")
+```
+
+```{r}
+#| echo: false
+vg(p, "datashade")
+```

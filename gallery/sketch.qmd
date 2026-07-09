@@ -1,0 +1,26 @@
+---
+title: "Hand-drawn sketch style"
+description: "A Rough.js-style hand-drawn rendering, applied per mark or as a whole theme."
+categories: [Effects]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+`sketch()` renders grobs with a hand-drawn wobble; `theme_sketch()` applies the
+same look across a whole plot (but never to text). A `seed` keeps the wobble
+reproducible.
+
+```{r}
+p <- vplot(datasets::iris) |>
+  mark_point(x = Sepal.Length, y = Petal.Length, color = Species, size = 3) |>
+  labs(title = "Hand-drawn iris") |>
+  theme_sketch(roughness = 1.1, seed = 2)
+```
+
+```{r}
+#| echo: false
+vg(p, "sketch")
+```

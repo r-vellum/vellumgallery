@@ -1,0 +1,61 @@
+---
+title: "About the vellum ecosystem"
+description: "What vellum is, how the pieces fit together, and how this gallery is built."
+toc: true
+---
+
+## One ecosystem, four packages
+
+**vellum** is a family of R packages for drawing, built around a shared scene
+model and a common design. The metaphor runs through the names: *vellum is the
+parchment, vellumplot is the pen, and vellumwidget is the annotation revealed on
+the page.*
+
+| Package | Role | Analogue |
+|---|---|---|
+| [**vellum**](https://r-vellum.github.io/vellum/) | Low-level graphics backend — a retained scene graph, a unit/layout engine, and PNG/SVG/PDF rendering, all running in a Rust engine. | `grid` |
+| [**vellumplot**](https://r-vellum.github.io/vellumplot/) | A declarative, pipe-first grammar of graphics that compiles an inspectable plot spec into a vellum scene. | `ggplot2` |
+| [**vellumwidget**](https://r-vellum.github.io/vellumwidget/) | Client-side interactive HTML widgets built from a vellum scene — hover, select, brush, zoom. No Shiny, no server. | `plotly` / `htmlwidgets` |
+| [**vellumverse**](https://r-vellum.github.io/vellumverse/) | A meta-package that installs and loads the whole ecosystem together. | `tidyverse` |
+
+## What makes it different
+
+- **A Rust backend.** The scene graph, layout solver, and renderers (raster,
+  SVG, PDF) live in Rust via extendr. Output is deterministic and
+  byte-stable across platforms — snapshot-testable graphics.
+- **One scene, three formats.** The same scene renders identically to PNG, SVG,
+  or PDF; geometry and text shaping stay consistent.
+- **A real compiler, not a wrapper.** A vellumplot plot is a serializable spec.
+  Nothing is drawn until it compiles: encodings resolve, scales train, the
+  panel layout is measured, and guides and marks are emitted as vellum grobs.
+- **A retained scene graph.** Because the scene is retained rather than drawn
+  immediate-mode, elements carry data keys and bounding boxes — which is exactly
+  what vellumwidget needs to wire up interactivity in the browser.
+- **A modern paint model.** Gradients, tiling patterns, alpha/luminance masks,
+  group opacity, and blend modes; plus built-in big-data aggregation with
+  `datashade()` and hand-drawn ("sketch") rendering.
+
+## Pipe-first, ggplot2-adjacent
+
+If you know ggplot2 the vocabulary will feel familiar — `mark_point()`,
+`scale_color_continuous()`, `facet_wrap()`, `theme_minimal()` — but plots are
+composed with the native pipe `|>` rather than `+`, and aesthetics are plain
+named arguments on each mark (no `aes()`):
+
+```r
+library(vellumplot)
+
+vplot(mtcars) |>
+  mark_point(x = wt, y = mpg, color = hp) |>
+  scale_color_continuous()
+```
+
+## About this gallery
+
+Every example on this site is real, runnable code — rendered by vellumplot on
+the vellum backend and frozen into the site so the deployment never needs to
+rebuild the Rust engine. The site is built with [Quarto](https://quarto.org)
+and styled to match the ecosystem's pkgdown pages (a parchment / sepia palette,
+set in Spectral).
+
+Source lives at [r-vellum/vellumgallery](https://github.com/r-vellum/vellumgallery).

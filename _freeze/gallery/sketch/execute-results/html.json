@@ -1,0 +1,15 @@
+{
+  "hash": "7800f185c50295642a8404c43db0adff",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Hand-drawn sketch style\"\ndescription: \"A Rough.js-style hand-drawn rendering, applied per mark or as a whole theme.\"\ncategories: [Effects]\n---\n\n\n\n`sketch()` renders grobs with a hand-drawn wobble; `theme_sketch()` applies the\nsame look across a whole plot (but never to text). A `seed` keeps the wobble\nreproducible.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(datasets::iris) |>\n  mark_point(x = Sepal.Length, y = Petal.Length, color = Species, size = 3) |>\n  labs(title = \"Hand-drawn iris\") |>\n  theme_sketch(roughness = 1.1, seed = 2)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/sketch.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

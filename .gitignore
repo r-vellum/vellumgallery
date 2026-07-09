@@ -1,0 +1,19 @@
+# Quarto render output (published via GitHub Actions, not tracked)
+/_site/
+.quarto/
+
+# Scratch / working notes
+/_docs/
+
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code local state
+.claude/

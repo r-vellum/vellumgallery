@@ -1,0 +1,15 @@
+{
+  "hash": "fc0d255c52c47d005751e590ded2cd66",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Density curve\"\ndescription: \"A kernel density estimate as a filled area, with an adjustable bandwidth.\"\ncategories: [Statistical]\n---\n\n\n\n`mark_density()` estimates a kernel density and fills the area beneath it. The\n`adjust` argument scales the bandwidth.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(faithful) |>\n  mark_density(x = eruptions, fill = \"#3182bd\", alpha = 0.6, adjust = 0.8) |>\n  labs(title = \"Old Faithful eruption density\", x = \"eruption (min)\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/density.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

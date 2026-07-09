@@ -1,0 +1,101 @@
+---
+pagetitle: "vellum gallery"
+description: "A gallery for the vellum graphics ecosystem in R — a Rust-backed backend, a pipe-first grammar of graphics, and client-side interactive widgets."
+toc: false
+page-layout: full
+---
+
+::::{.vellum-hero}
+![](assets/logos/vellumverse.png){.logo fig-alt="vellumverse hex logo"}
+
+# vellum gallery
+
+::::{.tagline}
+The parchment, the pen, and the annotation revealed on the page.
+::::
+
+A showcase of what you can draw with the **vellum** graphics ecosystem in R:
+a Rust-backed rendering backend, a pipe-first grammar of graphics, and
+self-contained interactive HTML widgets.
+
+[Browse the gallery →](gallery/index.qmd){.btn .btn-primary .btn-lg}
+::::
+
+## The ecosystem
+
+::::{.eco-grid}
+
+:::{.eco-card}
+[![](assets/logos/vellum.png){fig-alt="vellum hex logo"}](https://r-vellum.github.io/vellum/)
+### vellum
+[the parchment]{.role}
+
+A grid-like low-level graphics system whose scene graph, layout engine, and
+PNG/SVG/PDF rendering all run in a Rust backend.
+:::
+
+:::{.eco-card}
+[![](assets/logos/vellumplot.png){fig-alt="vellumplot hex logo"}](https://r-vellum.github.io/vellumplot/)
+### vellumplot
+[the pen]{.role}
+
+A declarative, pipe-first grammar of graphics that compiles an inspectable
+plot spec into a vellum scene.
+:::
+
+:::{.eco-card}
+[![](assets/logos/vellumwidget.png){fig-alt="vellumwidget hex logo"}](https://r-vellum.github.io/vellumwidget/)
+### vellumwidget
+[the annotation]{.role}
+
+Turns any vellum scene into a self-contained, client-side interactive HTML
+widget — hover, select, brush, zoom. No Shiny, no server.
+:::
+
+:::{.eco-card}
+[![](assets/logos/vellumverse.png){fig-alt="vellumverse hex logo"}](https://r-vellum.github.io/vellumverse/)
+### vellumverse
+[the meta-package]{.role}
+
+Installs and loads the whole ecosystem together, in the spirit of the
+tidyverse.
+:::
+
+::::
+
+## A taste
+
+One data frame, a couple of marks, a trained scale — that is a whole plot.
+
+```{r}
+#| include: false
+library(vellumplot)
+# Render a plot spec to a PNG and embed it. Using render_plot() (rather than
+# knitr's auto-print) keeps rendering off the knitr graphics device, whose
+# integer dpi the vellum backend rejects.
+vg <- function(p, name, dpi = 150) {
+  dir.create("figs", showWarnings = FALSE)
+  f <- file.path("figs", paste0(name, ".png"))
+  render_plot(p, f, dpi = dpi)
+  knitr::include_graphics(f)
+}
+```
+
+```{r}
+p <- vplot(mtcars, width = 7, height = 4.2) |>
+  mark_point(x = wt, y = mpg, color = hp, size = 2.4) |>
+  mark_smooth(x = wt, y = mpg, method = "lm", se = TRUE) |>
+  scale_color_continuous() |>
+  labs(
+    title = "Weight vs. fuel economy",
+    x = "weight (1000 lbs)", y = "miles per gallon", color = "hp"
+  ) |>
+  theme_minimal()
+```
+
+```{r}
+#| echo: false
+vg(p, "home-taste")
+```
+
+Ready to explore? [Head to the gallery.](gallery/index.qmd)

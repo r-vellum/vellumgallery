@@ -1,0 +1,17 @@
+{
+  "hash": "7a1e7631ec7315250e6316faa2ac2633",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\npagetitle: \"vellum gallery\"\ndescription: \"A gallery for the vellum graphics ecosystem in R — a Rust-backed backend, a pipe-first grammar of graphics, and client-side interactive widgets.\"\ntoc: false\npage-layout: full\n---\n\n::::{.vellum-hero}\n![](assets/logos/vellumverse.png){.logo fig-alt=\"vellumverse hex logo\"}\n\n# vellum gallery\n\n::::{.tagline}\nThe parchment, the pen, and the annotation revealed on the page.\n::::\n\nA showcase of what you can draw with the **vellum** graphics ecosystem in R:\na Rust-backed rendering backend, a pipe-first grammar of graphics, and\nself-contained interactive HTML widgets.\n\n[Browse the gallery →](gallery/index.qmd){.btn .btn-primary .btn-lg}\n::::\n\n## The ecosystem\n\n::::{.eco-grid}\n\n:::{.eco-card}\n[![](assets/logos/vellum.png){fig-alt=\"vellum hex logo\"}](https://r-vellum.github.io/vellum/)\n### vellum\n[the parchment]{.role}\n\nA grid-like low-level graphics system whose scene graph, layout engine, and\nPNG/SVG/PDF rendering all run in a Rust backend.\n:::\n\n:::{.eco-card}\n[![](assets/logos/vellumplot.png){fig-alt=\"vellumplot hex logo\"}](https://r-vellum.github.io/vellumplot/)\n### vellumplot\n[the pen]{.role}\n\nA declarative, pipe-first grammar of graphics that compiles an inspectable\nplot spec into a vellum scene.\n:::\n\n:::{.eco-card}\n[![](assets/logos/vellumwidget.png){fig-alt=\"vellumwidget hex logo\"}](https://r-vellum.github.io/vellumwidget/)\n### vellumwidget\n[the annotation]{.role}\n\nTurns any vellum scene into a self-contained, client-side interactive HTML\nwidget — hover, select, brush, zoom. No Shiny, no server.\n:::\n\n:::{.eco-card}\n[![](assets/logos/vellumverse.png){fig-alt=\"vellumverse hex logo\"}](https://r-vellum.github.io/vellumverse/)\n### vellumverse\n[the meta-package]{.role}\n\nInstalls and loads the whole ecosystem together, in the spirit of the\ntidyverse.\n:::\n\n::::\n\n## A taste\n\nOne data frame, a couple of marks, a trained scale — that is a whole plot.\n\n\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(mtcars, width = 7, height = 4.2) |>\n  mark_point(x = wt, y = mpg, color = hp, size = 2.4) |>\n  mark_smooth(x = wt, y = mpg, method = \"lm\", se = TRUE) |>\n  scale_color_continuous() |>\n  labs(\n    title = \"Weight vs. fuel economy\",\n    x = \"weight (1000 lbs)\", y = \"miles per gallon\", color = \"hp\"\n  ) |>\n  theme_minimal()\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/home-taste.png){width=100%}\n:::\n:::\n\n\nReady to explore? [Head to the gallery.](gallery/index.qmd)\n",
+    "supporting": [
+      "index_files"
+    ],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

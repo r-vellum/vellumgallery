@@ -1,0 +1,15 @@
+{
+  "hash": "b0f308286778e04c81af1173dc0dffe5",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Scatter with a continuous colour legend\"\ndescription: \"A point mark encoding a third variable to colour, with a trained continuous scale and guide.\"\ncategories: [Basics]\n---\n\n\n\nEvery plot starts from a data frame with `vplot()`, then adds marks with the\nnative pipe. Here a `mark_point()` encodes `hp` to colour, and\n`scale_color_continuous()` trains the scale and draws the guide.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(mtcars) |>\n  mark_point(x = wt, y = mpg, color = hp) |>\n  scale_color_continuous()\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/scatter-color.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

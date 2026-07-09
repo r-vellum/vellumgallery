@@ -1,0 +1,15 @@
+{
+  "hash": "eaaf498c01ac4cda9269e4df34ddfd61",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Neon glow and gradient fill\"\ndescription: \"A high-contrast cyberpunk theme with a glowing line and a gradient area fill.\"\ncategories: [Effects]\n---\n\n\n\nLayer effects and gradient fills are first-class. A `linear_gradient()` fades\nthe area to transparent, `glow()` haloes the line, and `theme_cyberpunk()` sets\nthe near-black canvas and neon palette.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nset.seed(1)\narea <- data.frame(x = 1:80, y = 20 + cumsum(rnorm(80, 0.05, 1)))\n\np <- vplot(area) |>\n  mark_area(\n    x = x, y = y,\n    fill = linear_gradient(c(\"#08F7FE\", \"#08F7FE00\"),\n                           x1 = 0, y1 = 1, x2 = 0, y2 = 0)\n  ) |>\n  mark_line(x = x, y = y, color = \"#08F7FE\", effects = list(glow(size = 5))) |>\n  labs(title = \"Gradient fill under a neon line\") |>\n  theme_cyberpunk()\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/cyberpunk.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

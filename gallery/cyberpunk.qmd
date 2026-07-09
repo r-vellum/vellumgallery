@@ -1,0 +1,34 @@
+---
+title: "Neon glow and gradient fill"
+description: "A high-contrast cyberpunk theme with a glowing line and a gradient area fill."
+categories: [Effects]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+Layer effects and gradient fills are first-class. A `linear_gradient()` fades
+the area to transparent, `glow()` haloes the line, and `theme_cyberpunk()` sets
+the near-black canvas and neon palette.
+
+```{r}
+set.seed(1)
+area <- data.frame(x = 1:80, y = 20 + cumsum(rnorm(80, 0.05, 1)))
+
+p <- vplot(area) |>
+  mark_area(
+    x = x, y = y,
+    fill = linear_gradient(c("#08F7FE", "#08F7FE00"),
+                           x1 = 0, y1 = 1, x2 = 0, y2 = 0)
+  ) |>
+  mark_line(x = x, y = y, color = "#08F7FE", effects = list(glow(size = 5))) |>
+  labs(title = "Gradient fill under a neon line") |>
+  theme_cyberpunk()
+```
+
+```{r}
+#| echo: false
+vg(p, "cyberpunk")
+```

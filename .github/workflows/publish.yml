@@ -1,0 +1,35 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deploy the rendered site to the gh-pages branch.
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      # No R, Rust, or vellum packages are installed here on purpose: all
+      # computational output is committed under _freeze/, so Quarto reuses it
+      # instead of re-executing. Re-render locally after editing any R chunk
+      # (`quarto render`) and commit the refreshed _freeze/ directory.
+      - name: Render and publish to gh-pages
+        uses: quarto-dev/quarto-actions/publish@v2
+        with:
+          target: gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

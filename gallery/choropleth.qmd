@@ -1,0 +1,27 @@
+---
+title: "Choropleth map"
+description: "An sf object drawn directly with mark_sf() and a proper map projection via coord_sf()."
+categories: [Spatial]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+vellumplot reads simple-features geometry directly. `mark_sf()` draws the
+polygons and `coord_sf()` handles the projection and aspect ratio.
+
+```{r}
+nc <- sf::st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
+
+p <- vplot(nc, width = 8, height = 3.6) |>
+  mark_sf(fill = BIR74) |>
+  coord_sf() |>
+  labs(title = "Births by county, North Carolina (1974)", fill = "births")
+```
+
+```{r}
+#| echo: false
+vg(p, "choropleth")
+```

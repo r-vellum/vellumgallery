@@ -1,0 +1,15 @@
+{
+  "hash": "13418ad0b5a9293fb4b2989ee92287ba",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Composing plots\"\ndescription: \"Arrange several independent plots into one figure with a patchwork-style design string.\"\ncategories: [Composition]\n---\n\n\n\nvellumplot composes finished plots the way patchwork does, but with functions\ninstead of operators. A `design` string lays panels out on a grid — here one\nwide scatter on top (`A`) and two panels below (`B`, `C`).\n\n\n::: {.cell}\n\n```{.r .cell-code}\npeng <- na.omit(datasets::penguins)\n\np_scatter <- vplot(peng) |>\n  mark_point(x = bill_len, y = flipper_len, color = species)\np_hist <- vplot(peng) |>\n  mark_histogram(x = body_mass, bins = 20, fill = species)\np_box <- vplot(peng) |>\n  mark_boxplot(x = species, y = bill_dep, fill = species)\n\np <- concat(\n  p_scatter, p_hist, p_box,\n  design = \"\n    AA\n    BC\n  \"\n)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/composition.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

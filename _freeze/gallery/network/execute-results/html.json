@@ -1,0 +1,15 @@
+{
+  "hash": "66519c1faf8ba8097df9fb4a571b8e50",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Network diagram\"\ndescription: \"A node-link diagram from an igraph graph, laid out with a stress layout.\"\ncategories: [Networks]\n---\n\n\n\n`vgraph()` starts a plot from an igraph graph and computes a layout (stress by\ndefault). `mark_edges()` and `mark_nodes()` then draw the graph, with node\nattributes mapped to size and fill.\n\n\n::: {.cell}\n\n```{.r .cell-code}\ng <- igraph::make_graph(\"Zachary\")\ng <- igraph::set_vertex_attr(\n  g, \"grp\",\n  value = as.factor(igraph::cluster_louvain(g)$membership)\n)\ng <- igraph::set_vertex_attr(g, \"deg\", value = igraph::degree(g))\n\np <- vgraph(g, layout = \"stress\") |>\n  mark_edges(alpha = 0.4) |>\n  mark_nodes(size = deg, fill = grp) |>\n  scale_size(range = c(2, 8)) |>\n  labs(title = \"Zachary's karate club\", fill = \"community\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/network.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

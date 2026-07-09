@@ -1,0 +1,25 @@
+---
+title: "Coxcomb (polar bars)"
+description: "Bars mapped into polar space — a Nightingale-style coxcomb via coord_polar()."
+categories: [Polar]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+Coordinate systems apply after the marks are built. Draw bars, then bend the
+space with `coord_polar()`.
+
+```{r}
+p <- vplot(mtcars) |>
+  mark_bar(x = factor(cyl), fill = factor(cyl)) |>
+  coord_polar(theta = "x") |>
+  labs(title = "Coxcomb (bars in polar space)", fill = "cyl")
+```
+
+```{r}
+#| echo: false
+vg(p, "coxcomb")
+```

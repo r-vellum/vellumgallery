@@ -1,0 +1,24 @@
+---
+title: "Gallery"
+description: "Plots and interactive widgets built with the vellum ecosystem — every example is real, runnable code."
+listing:
+  id: gallery-listing
+  contents: "*.qmd"
+  exclude:
+    filename: "index.qmd"
+  type: grid
+  grid-columns: 3
+  sort: false
+  categories: true
+  image-height: "220px"
+  fields: [image, title, description, categories]
+page-layout: full
+toc: false
+---
+
+Each card is a self-contained example. Click through for the code and the
+rendered result. Everything is drawn by [vellumplot](https://r-vellum.github.io/vellumplot/)
+on the Rust-backed [vellum](https://r-vellum.github.io/vellum/) engine.
+
+:::{#gallery-listing}
+:::

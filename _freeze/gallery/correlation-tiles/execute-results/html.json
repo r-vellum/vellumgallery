@@ -1,0 +1,15 @@
+{
+  "hash": "c0373cabdc1be25ab0460fcfc40f7dec",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Correlation matrix\"\ndescription: \"A heatmap of a correlation matrix drawn with tile marks and a diverging fill scale.\"\ncategories: [Heatmaps]\n---\n\n\n\nReshape a correlation matrix to long form and draw it with `mark_tile()`, then\nmap the correlation to a diverging `scale_fill_gradient()`.\n\n\n::: {.cell}\n\n```{.r .cell-code}\ncm <- cor(mtcars[, c(\"mpg\", \"disp\", \"hp\", \"drat\", \"wt\", \"qsec\")])\nhm <- expand.grid(v1 = rownames(cm), v2 = colnames(cm))\nhm$cor <- as.vector(cm)\n\np <- vplot(hm) |>\n  mark_tile(x = v1, y = v2, fill = cor) |>\n  scale_fill_gradient(low = \"#b2182b\", high = \"#2166ac\") |>\n  labs(title = \"Correlation matrix (tiles)\", x = NULL, y = NULL)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/correlation-tiles.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

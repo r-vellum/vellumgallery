@@ -1,0 +1,79 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - "*.qmd"
+    - "gallery/*.qmd"
+
+# Freeze computed output so the deploy runner never needs R, Rust, or the
+# vellum packages. Re-render locally (`quarto render`) after editing R chunks
+# and commit the refreshed `_freeze/` directory.
+execute:
+  freeze: auto
+
+knitr:
+  opts_chunk:
+    dev: "png"
+    fig-width: 7
+    fig-height: 4.5
+    dpi: 150
+    fig-retina: 2
+    out-width: "100%"
+    collapse: true
+    comment: "#>"
+    message: false
+    warning: false
+
+website:
+  title: "vellum gallery"
+  description: "A gallery for the vellum graphics ecosystem in R."
+  site-url: "https://r-vellum.github.io/vellumgallery/"
+  repo-url: "https://github.com/r-vellum/vellumgallery"
+  favicon: assets/favicon.ico
+  page-navigation: true
+  back-to-top-navigation: true
+  navbar:
+    background: light
+    logo: assets/logos/vellumverse.png
+    logo-alt: "vellumverse hex logo"
+    title: "vellum gallery"
+    left:
+      - text: "Home"
+        href: index.qmd
+      - text: "Gallery"
+        href: gallery/index.qmd
+      - text: "About"
+        href: about.qmd
+    right:
+      - text: "Ecosystem"
+        menu:
+          - text: "vellum — the backend"
+            href: "https://r-vellum.github.io/vellum/"
+          - text: "vellumplot — the grammar"
+            href: "https://r-vellum.github.io/vellumplot/"
+          - text: "vellumwidget — interactive"
+            href: "https://r-vellum.github.io/vellumwidget/"
+          - text: "vellumverse — the meta-package"
+            href: "https://r-vellum.github.io/vellumverse/"
+      - icon: github
+        href: "https://github.com/r-vellum/vellumgallery"
+        aria-label: "GitHub"
+  page-footer:
+    background: light
+    left: "Built with [Quarto](https://quarto.org) · part of the [vellum](https://github.com/r-vellum) ecosystem"
+    right: "© 2026 · MIT licensed"
+
+format:
+  html:
+    theme:
+      - theme/vellum.scss
+    toc: true
+    toc-title: "On this page"
+    include-in-header:
+      - includes/head.html
+    grid:
+      body-width: 950px
+    fig-align: center
+    code-copy: true
+    code-overflow: wrap
+    link-external-newwindow: true

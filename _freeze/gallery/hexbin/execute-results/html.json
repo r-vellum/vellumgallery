@@ -1,0 +1,15 @@
+{
+  "hash": "02aeb6af8726e606ca8879215214be72",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Hexagonal binning\"\ndescription: \"Twenty thousand points binned into hexagons, shaded by count with a perceptual palette.\"\ncategories: [Heatmaps]\n---\n\n\n\nWhen a scatter would be an unreadable blob, bin it. `mark_hex()` aggregates\npoints into hexagonal cells; `scale_fill_continuous()` takes a named perceptual\npalette (here Batlow).\n\n\n::: {.cell}\n\n```{.r .cell-code}\nset.seed(1)\nn <- 20000\ndf <- data.frame(x = rnorm(n), y = rnorm(n) + rnorm(n, 0, 0.4))\n\np <- vplot(df) |>\n  mark_hex(x = x, y = y, bins = 30) |>\n  scale_fill_continuous(palette = \"Batlow\") |>\n  labs(title = \"Twenty thousand points, hexagonal bins\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/hexbin.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
