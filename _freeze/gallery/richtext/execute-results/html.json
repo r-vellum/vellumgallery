@@ -1,0 +1,15 @@
+{
+  "hash": "6dbd3e46590cea24c32f40f49381d6a5",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Rich text labels with md()\"\ndescription: \"Markdown markup in titles and axis names: bold, italic, superscript, and subscript via md().\"\ncategories: [Text]\n---\n\n\n\nWrap a label in `md()` and it accepts a small slice of Markdown: `**bold**`,\n`*italic*`, `^superscript^`, and `~subscript~`. It works anywhere a label does,\nincluding plot titles, subtitles, and axis names. Superscripts and subscripts\nearn their keep on units and formulae, like m^2^ or CO~2~.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npeng <- na.omit(datasets::penguins)\n\np <- vplot(peng) |>\n  mark_point(x = bill_len, y = body_mass, color = species, size = 2) |>\n  labs(\n    title = md(\"**Body mass** of *Pygoscelis* penguins\"),\n    subtitle = md(\"Axis titles carry markup too: **bold**, *italic*, super/subscript\"),\n    y = md(\"Body mass (kg x 10^3^)\"),\n    x = md(\"Bill length (*mm*)\"),\n    color = \"Species\"\n  )\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/richtext.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
