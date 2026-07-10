@@ -1,0 +1,93 @@
+---
+title: "Linked views with crosstalk"
+description: "One SharedData, four coordinated views: brush a plot to highlight the others, and filter inputs cross-filter them all. Client-side, no Shiny."
+categories: [Interactive]
+image: figs/crosstalk.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+library(crosstalk)
+library(DT)
+library(palmerpenguins)
+
+pen <- penguins[complete.cases(penguins), ]
+pen$id <- seq_len(nrow(pen))
+
+# Static preview for the gallery card.
+prev <- vplot(pen) |>
+  mark_point(x = bill_length_mm, y = bill_depth_mm, color = species, size = 2.2)
+render_plot(prev, "figs/crosstalk.png", dpi = 150)
+```
+
+[crosstalk](https://rstudio.github.io/crosstalk/) links HTML widgets in the
+browser through a shared key, with no Shiny and no server. Wrap a data frame in
+a `SharedData` object, hand it to every widget, and a selection made in one
+propagates to the rest. `as_widget()` joins in through its `crosstalk` argument:
+the plot's `data_id`s are matched against the SharedData's keys.
+
+Here one `SharedData` over the 333 complete Palmer Penguins drives everything on
+the page. The key is a row id that each view carries.
+
+```{r}
+sd <- SharedData$new(pen, key = ~id)
+```
+
+## Filter inputs
+
+crosstalk ships input widgets that filter the shared data directly. A filter
+hides the non-matching rows in every linked view at once.
+
+```{r}
+bscols(
+  filter_checkbox("species", "Species", sd, ~species, inline = TRUE),
+  filter_select("island", "Island", sd, ~island),
+  filter_slider("mass", "Body mass (g)", sd, ~body_mass_g, width = "100%")
+)
+```
+
+## Two plots, linked
+
+Both scatterplots read from `sd`, so a brush drawn in either one highlights the
+same penguins in the other. The left plot is the well-known one: pooled, bill
+length and depth look negatively related, but brush a single species and the
+trend inside it runs the other way.
+
+```{r}
+bill <- vplot(pen) |>
+  mark_point(x = bill_length_mm, y = bill_depth_mm, color = species,
+             data_id = id, tooltip = species, size = 2.4) |>
+  labs(title = "Bill length vs. depth", x = "length (mm)", y = "depth (mm)")
+
+body <- vplot(pen) |>
+  mark_point(x = flipper_length_mm, y = body_mass_g, color = species,
+             data_id = id, tooltip = species, size = 2.4) |>
+  labs(title = "Flipper vs. body mass", x = "flipper (mm)", y = "mass (g)")
+
+bscols(
+  as_widget(bill, crosstalk = sd, height = 360),
+  as_widget(body, crosstalk = sd, height = 360)
+)
+```
+
+## A table, linked too
+
+The same `sd` backs a `DT` table. Brushing either plot scrolls the selection to
+the top and highlights it here; ticking rows here highlights the points there.
+
+```{r}
+datatable(
+  sd,
+  rownames = FALSE,
+  colnames = c("Species", "Island", "Bill length", "Bill depth",
+               "Flipper", "Mass", "Sex", "Year", "id"),
+  options = list(pageLength = 6, dom = "tp")
+)
+```
+
+Nothing above talks to a server. crosstalk resolves every selection and filter
+in the browser from the shared keys, so the whole page works as a static file.
+The trade-off is that the data ships to the client, which suits a few thousand
+rows, not a few million.
