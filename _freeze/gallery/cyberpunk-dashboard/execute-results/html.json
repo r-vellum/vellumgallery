@@ -1,0 +1,15 @@
+{
+  "hash": "94b80ddfe285c2a948e82b3033b8dadc",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Cyberpunk dashboard\"\ndescription: \"Four neon panels composed into one dark dashboard with a design string, glowing lines, and a gradient area fill.\"\ncategories: [Composition, Effects]\n---\n\n\n\nComposition and layer effects combine into a dashboard. Each panel is an\nordinary plot under `theme_cyberpunk()`, and `concat()` arranges them with a\n`design` string: `SIGNAL` fills a two-by-two block on the left, `COUNTS` runs\ndown the right, and `CLUSTERS` and `DENSITY` take the remaining cells. Because\nthe theme paints every panel on the same near-black canvas, the seams disappear.\n\n`glow()` haloes the stroked and point marks (the line and the scatter); it does\nnot apply to bars or filled areas, so those lean on the neon palette and a\n`linear_gradient()` fill instead.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nset.seed(42)\n\nsignal <- vplot(data.frame(t = 1:120, v = 40 + cumsum(rnorm(120, 0.1, 1.4)))) |>\n  mark_area(\n    x = t, y = v,\n    fill = linear_gradient(c(\"#08F7FE\", \"#08F7FE00\"), x1 = 0, y1 = 1, x2 = 0, y2 = 0)\n  ) |>\n  mark_line(x = t, y = v, color = \"#08F7FE\", effects = list(glow(size = 5))) |>\n  labs(title = \"SIGNAL\", x = NULL, y = NULL) |>\n  theme_cyberpunk()\n\nclusters <- vplot(datasets::iris) |>\n  mark_point(\n    x = Petal.Length, y = Petal.Width, color = Species, size = 2,\n    effects = list(glow(size = 3))\n  ) |>\n  labs(title = \"CLUSTERS\", x = NULL, y = NULL, color = NULL) |>\n  theme_cyberpunk()\n\ncounts <- vplot(as.data.frame(table(cyl = factor(mtcars$cyl)))) |>\n  mark_bar(x = cyl, y = Freq, fill = cyl) |>\n  labs(title = \"COUNTS\", x = NULL, y = NULL) |>\n  theme_cyberpunk()\n\ndensity <- vplot(faithful) |>\n  mark_density(x = eruptions, fill = \"#FE53BB\", color = \"#FE53BB\", alpha = 0.5) |>\n  labs(title = \"DENSITY\", x = NULL, y = NULL) |>\n  theme_cyberpunk()\n\np <- concat(\n  signal, clusters, counts, density,\n  design = \"\n    AAB\n    AAC\n    DDC\n  \"\n)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/cyberpunk-dashboard.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
