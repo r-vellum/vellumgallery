@@ -3,9 +3,7 @@
   "result": {
     "engine": "knitr",
     "markdown": "---\ntitle: \"Datashading a million points\"\ndescription: \"Aggregate-then-shade rendering that stays fast and legible at a million points.\"\ncategories: [Big data]\n---\n\n\n\nA scatter of a million points is just ink. `mark_datashade()` uses vellum's\nbuilt-in datashader-style fast path: aggregate points into a pixel grid, then\nshade by density, so the picture scales with the canvas, not the data.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nset.seed(1)\nn <- 1e6\ndf <- data.frame(x = rnorm(n), y = rnorm(n) + rnorm(n, 0, 0.4))\n\np <- vplot(df) |>\n  mark_datashade(x = x, y = y) |>\n  labs(title = \"One million points, datashaded\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/datashade.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [
-      "datashade_files"
-    ],
+    "supporting": [],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],

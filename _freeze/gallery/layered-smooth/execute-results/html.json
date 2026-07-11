@@ -3,9 +3,7 @@
   "result": {
     "engine": "knitr",
     "markdown": "---\ntitle: \"Layered marks: points and a smooth\"\ndescription: \"Two marks over the same data: a scatter and a linear smooth with a confidence band.\"\ncategories: [Basics]\n---\n\n\n\nMarks stack in the order you pipe them. Here a `mark_point()` layer is drawn\nfirst, then a `mark_smooth()` fits a linear model and draws its confidence band\non top.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npeng <- na.omit(datasets::penguins)\n\np <- vplot(peng) |>\n  mark_point(x = bill_len, y = body_mass, color = species, alpha = 0.5) |>\n  mark_smooth(x = bill_len, y = body_mass, method = \"lm\", se = TRUE) |>\n  labs(title = \"Linear smooth with confidence band\",\n       x = \"bill length (mm)\", y = \"body mass (g)\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/layered-smooth.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [
-      "layered-smooth_files"
-    ],
+    "supporting": [],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],

@@ -3,9 +3,7 @@
   "result": {
     "engine": "knitr",
     "markdown": "---\ntitle: \"Faceting\"\ndescription: \"Small multiples: one panel per level of a grouping variable with facet_wrap().\"\ncategories: [Composition]\n---\n\n\n\n`facet_wrap()` splits the data into a panel per group, sharing scales so the\npanels are directly comparable.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(mtcars, width = 8, height = 3.4) |>\n  mark_point(x = wt, y = mpg) |>\n  facet_wrap(~cyl) |>\n  labs(title = \"Weight vs. mpg, faceted by cylinder count\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/facets.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [
-      "facets_files"
-    ],
+    "supporting": [],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],

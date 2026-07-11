@@ -24,7 +24,7 @@ g <- igraph::set_vertex_attr(g, "deg", value = igraph::degree(g))
 p <- vgraph(g, layout = "stress") |>
   mark_edges(alpha = 0.4) |>
   mark_nodes(size = deg, fill = grp) |>
-  scale_size(range = c(2, 8)) |>
+  scale_size(range = c(1, 3)) |>
   labs(title = "Zachary's karate club", fill = "community")
 ```
 

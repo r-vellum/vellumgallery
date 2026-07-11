@@ -3,9 +3,7 @@
   "result": {
     "engine": "knitr",
     "markdown": "---\ntitle: \"Boxplots and violins\"\ndescription: \"Two views of the same grouped distribution: a boxplot and a violin, side by side.\"\ncategories: [Statistical]\n---\n\n\n\n`mark_boxplot()` and `mark_violin()` both summarise a continuous variable across\na discrete group. Here they are composed into a single figure with `hconcat()`.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npeng <- na.omit(datasets::penguins)\n\nbox <- vplot(peng) |>\n  mark_boxplot(x = species, y = flipper_len, fill = species) |>\n  labs(title = \"Boxplot\", y = \"flipper (mm)\")\n\nvio <- vplot(peng) |>\n  mark_violin(x = species, y = flipper_len, fill = species) |>\n  labs(title = \"Violin\", y = NULL)\n\np <- hconcat(box, vio)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/boxplot-violin.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [
-      "boxplot-violin_files"
-    ],
+    "supporting": [],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],

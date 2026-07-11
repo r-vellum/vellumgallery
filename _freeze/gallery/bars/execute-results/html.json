@@ -3,9 +3,7 @@
   "result": {
     "engine": "knitr",
     "markdown": "---\ntitle: \"Bar chart with a count stat\"\ndescription: \"A bar mark that counts rows per category: the count stat, used when no y is supplied.\"\ncategories: [Basics]\n---\n\n\n\nGive `mark_bar()` a discrete `x` and no `y`, and it counts rows per category.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npeng <- na.omit(datasets::penguins)\n\np <- vplot(peng) |>\n  mark_bar(x = species, fill = species) |>\n  labs(title = \"Counts per species (count stat)\", y = \"count\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/bars.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [
-      "bars_files"
-    ],
+    "supporting": [],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],

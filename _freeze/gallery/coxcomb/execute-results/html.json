@@ -3,9 +3,7 @@
   "result": {
     "engine": "knitr",
     "markdown": "---\ntitle: \"Coxcomb (polar bars)\"\ndescription: \"Bars mapped into polar space: a Nightingale-style coxcomb via coord_polar().\"\ncategories: [Polar]\n---\n\n\n\nCoordinate systems apply after the marks are built. Draw bars, then bend the\nspace with `coord_polar()`.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(mtcars) |>\n  mark_bar(x = factor(cyl), fill = factor(cyl)) |>\n  coord_polar(theta = \"x\") |>\n  labs(title = \"Coxcomb (bars in polar space)\", fill = \"cyl\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/coxcomb.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [
-      "coxcomb_files"
-    ],
+    "supporting": [],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],
