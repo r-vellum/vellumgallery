@@ -1,0 +1,15 @@
+{
+  "hash": "c1c756ef34c4d9ecf26cf0a44bb5af98",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Marginal distributions\"\ndescription: \"add_marginal() draws the x and y distributions along the panel edges, aligned to the scatter. Density or histogram, pooled or split by group.\"\ncategories: [Statistical]\nimage: figs/marginal-grouped.png\n---\n\n\n\nA scatter shows how two variables move together but says nothing about what each\none does on its own. `add_marginal()` puts that back: it draws the distribution\nof `x` along the top edge and of `y` along the right edge, on the panel's own\naxes so they line up with the cloud. It is a plot-level modifier, like\n`facet_wrap()`, and reads `x` and `y` straight from the `mark_point()` layer.\n\nThe data is the 333 complete [Palmer Penguins](https://allisonhorst.github.io/palmerpenguins/).\n\n## Pooled\n\nWith no arguments it adds a kernel density to both edges.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(pen) |>\n  mark_point(x = flipper_length_mm, y = body_mass_g, size = 1.8, color = \"#2b6cb0\") |>\n  add_marginal() |>\n  labs(title = \"Flipper length vs. body mass\", x = \"flipper (mm)\", y = \"mass (g)\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/marginal.png){width=100%}\n:::\n:::\n\n\nThe top curve is faintly bimodal and the right one clearly so, a hint that the\npenguins fall into groups the pooled view hides.\n\n## Split by group\n\nMap `color` to a discrete variable and pass `group = TRUE`, and each edge splits\ninto one curve per group in the matching colour. Bill length against depth is\nthe case worth seeing: pooled, the two measurements look unrelated, but the\nper-species marginals show Adelie, Chinstrap and Gentoo separating cleanly on\nboth axes.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(pen) |>\n  mark_point(x = bill_length_mm, y = bill_depth_mm, color = species, size = 1.8) |>\n  add_marginal(group = TRUE) |>\n  labs(title = \"Bill dimensions by species\", x = \"length (mm)\", y = \"depth (mm)\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/marginal-grouped.png){width=100%}\n:::\n:::\n\n\n## Histograms instead\n\nSet `type = \"histogram\"` for binned counts rather than a smooth curve; `bins`\nsets the count and `sides` picks the edges (`\"t\"`, `\"r\"`, or `\"tr\"`).\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vplot(pen) |>\n  mark_point(x = flipper_length_mm, y = body_mass_g, color = species, size = 1.8) |>\n  add_marginal(type = \"histogram\", group = TRUE) |>\n  labs(title = \"Histogram marginals\", x = \"flipper (mm)\", y = \"mass (g)\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/marginal-hist.png){width=100%}\n:::\n:::\n\n\n`add_marginal()` works on a single Cartesian panel, so it does not combine with\nfaceting or a fixed coordinate system.\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
