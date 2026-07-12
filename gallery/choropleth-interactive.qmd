@@ -1,0 +1,67 @@
+---
+title: "Interactive choropleth"
+description: "The North Carolina choropleth as a client-side widget: hover a county for a styled HTML tooltip, with data_id keying every interaction."
+categories: [Interactive, Spatial]
+image: figs/choropleth-interactive.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+library(glue)
+
+nc <- sf::st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
+
+# Static preview for the gallery card.
+prev <- vplot(nc, width = 8, height = 3.6) |>
+  mark_sf(fill = BIR74) |>
+  coord_sf() |>
+  labs(title = "Births by county, North Carolina (1974)", fill = "births")
+render_plot(prev, "figs/choropleth-interactive.png", dpi = 150)
+```
+
+The [static choropleth](choropleth.qmd) drops straight into `as_widget()`. It
+needs two more mark arguments: `tooltip`, the label shown on hover, and
+`data_id`, the stable key that ties a polygon to hover, selection, and brushing.
+
+`tooltip` is an ordinary data-masked expression, so you can build it with
+`glue()` and return a bit of HTML. The runtime escapes the data values and keeps
+only the inert tags `<b>`, `<i>`, and `<br>`, so bold county names and line
+breaks are safe to pass through.
+
+```{r}
+p <- vplot(nc, width = 8, height = 4.6) |>
+  mark_sf(
+    fill    = BIR74,
+    tooltip = glue("<b>{NAME} County</b><br>{BIR74} births · {SID74} SIDS deaths"),
+    data_id = NAME
+  ) |>
+  coord_sf() |>
+  labs(title = "Births by county, North Carolina (1974)", fill = "births")
+```
+
+## Styling the tooltip
+
+`tooltip_style` is a recent addition: pass a named list to restyle the tooltip
+box without writing CSS. It takes `background` and `color` (any R or CSS colour),
+a `fontsize`, and a `max_width`. Here a warm dark box picks up the gallery's
+parchment palette in place of the built-in default.
+
+```{r}
+p |>
+  as_widget(
+    tooltip_style = list(
+      background = "#2b2118",
+      color      = "#f4ece0",
+      fontsize   = 13,
+      max_width  = "240px"
+    ),
+    height = 460
+  )
+```
+
+Everything runs in the browser from the embedded SVG and its element table, with
+no server. Hover a county for the styled tooltip, click to select, drag to brush
+a region, and scroll to zoom. The projection set by `coord_sf()` is baked into
+the geometry, so panning and zooming stay true to the map.

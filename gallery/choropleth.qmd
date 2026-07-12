@@ -12,6 +12,9 @@ source("_helper.R")
 vellumplot reads simple-features geometry directly. `mark_sf()` draws the
 polygons and `coord_sf()` handles the projection and aspect ratio.
 
+For a version you can hover, select, and zoom, see the
+[interactive choropleth](choropleth-interactive.qmd).
+
 ```{r}
 nc <- sf::st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
 

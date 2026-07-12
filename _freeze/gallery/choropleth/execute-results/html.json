@@ -1,9 +1,11 @@
 {
-  "hash": "502862916cc37d7e050ff65685706c29",
+  "hash": "559ae4323faebacd191f2a9482279165",
   "result": {
     "engine": "knitr",
-    "markdown": "---\ntitle: \"Choropleth map\"\ndescription: \"An sf object drawn directly with mark_sf() and a proper map projection via coord_sf().\"\ncategories: [Spatial]\n---\n\n\n\nvellumplot reads simple-features geometry directly. `mark_sf()` draws the\npolygons and `coord_sf()` handles the projection and aspect ratio.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nnc <- sf::st_read(system.file(\"shape/nc.shp\", package = \"sf\"), quiet = TRUE)\n\np <- vplot(nc, width = 8, height = 3.6) |>\n  mark_sf(fill = BIR74) |>\n  coord_sf() |>\n  labs(title = \"Births by county, North Carolina (1974)\", fill = \"births\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/choropleth.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [],
+    "markdown": "---\ntitle: \"Choropleth map\"\ndescription: \"An sf object drawn directly with mark_sf() and a proper map projection via coord_sf().\"\ncategories: [Spatial]\n---\n\n\n\nvellumplot reads simple-features geometry directly. `mark_sf()` draws the\npolygons and `coord_sf()` handles the projection and aspect ratio.\n\nFor a version you can hover, select, and zoom, see the\n[interactive choropleth](choropleth-interactive.qmd).\n\n\n::: {.cell}\n\n```{.r .cell-code}\nnc <- sf::st_read(system.file(\"shape/nc.shp\", package = \"sf\"), quiet = TRUE)\n\np <- vplot(nc, width = 8, height = 3.6) |>\n  mark_sf(fill = BIR74) |>\n  coord_sf() |>\n  labs(title = \"Births by county, North Carolina (1974)\", fill = \"births\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/choropleth.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [
+      "choropleth_files"
+    ],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],
