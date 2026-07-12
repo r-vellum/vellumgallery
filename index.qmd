@@ -6,7 +6,7 @@ page-layout: full
 ---
 
 ::::{.vellum-hero}
-![](assets/logos/vellumverse.png){.logo fig-alt="vellumverse hex logo"}
+![](assets/logos/r-vellum.png){.logo fig-alt="R-vellum emblem: a compass, gears, plots, and a quill on parchment"}
 
 # vellum gallery
 
