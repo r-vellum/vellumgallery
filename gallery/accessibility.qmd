@@ -1,0 +1,94 @@
+---
+title: "Alt text that ships with the plot"
+description: "Every vellumplot writes a text alternative into the file it renders: role=\"img\" and a <desc> in SVG, a tagged Figure in PDF. plot_alt() shows you what a screen reader will read."
+categories: [Accessibility]
+image: figs/accessibility.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(palmerpenguins)
+pen <- penguins[complete.cases(penguins), ]
+```
+
+A chart with no text alternative is invisible to anyone using a screen reader.
+Most plotting libraries leave that gap for you to fill by hand, so in practice
+it stays empty. vellumplot fills it by default: every plot carries a written
+description, and that description travels into the rendered file.
+
+The data is the 333 complete [Palmer Penguins](https://allisonhorst.github.io/palmerpenguins/).
+
+```{r}
+p <- vplot(pen) |>
+  mark_point(x = flipper_length_mm, y = body_mass_g, color = species, size = 2) |>
+  labs(title = "Flipper length vs. body mass",
+       x = "flipper length (mm)", y = "body mass (g)", color = "species")
+```
+
+```{r}
+#| echo: false
+vg(p, "accessibility")
+```
+
+## What a screen reader gets
+
+`plot_alt()` returns the description vellumplot will attach. You did not write
+one, so it built the sentence from the specification: the chart type, what each
+axis and the colour encode, and how many observations went in.
+
+```{r}
+plot_alt(p)
+```
+
+That summary is honest but mechanical. It reports the encoding, not the finding.
+When the point of the chart is a pattern, write the pattern yourself with
+`labs(alt = ...)` and vellumplot uses your text verbatim.
+
+```{r}
+p <- p |>
+  labs(alt = paste(
+    "Body mass rises with flipper length across all three penguin species.",
+    "Gentoo penguins cluster in the upper right as the largest on both",
+    "measures, while Adelie and Chinstrap overlap in the lower left."
+  ))
+
+plot_alt(p)
+```
+
+## It ends up in the file
+
+The description is not metadata you have to remember to export. When the plot
+renders, it goes into the file. An SVG gets `role="img"` and an
+`aria-labelledby` that points at the title and the description, so assistive
+technology reads the title as the chart's name and the `<desc>` as its content.
+
+```{r}
+#| echo: false
+#| class-output: default
+dir.create("figs", showWarnings = FALSE)
+render_plot(p, "figs/accessibility.svg", dpi = 150)
+svg <- paste(readLines("figs/accessibility.svg"), collapse = "\n")
+svg_open <- regmatches(svg, regexpr("<svg[^>]*>", svg))
+title <- regmatches(svg, regexpr("<title[^<]*</title>", svg))
+desc  <- regmatches(svg, regexpr("<desc[^<]*</desc>", svg))
+cat(svg_open, "\n  ", title, "\n  ", desc, "\n  ...\n</svg>\n", sep = "")
+```
+
+The title comes from `labs(title = ...)` and becomes the accessible name; the
+`<desc>` is whatever `plot_alt()` returns. Render the same plot to PDF and the
+chart is tagged as a `Figure` whose `Alt` is that text, which is what a
+PDF reader announces and what a tagging checker looks for.
+
+Because the description comes from the spec, you can read it back in R, in the
+console, before anything is drawn. So you can review it, or test it, the way you
+would any other output.
+
+```{r}
+#| eval: false
+testthat::expect_match(plot_alt(p), "flipper length")
+```
+
+See the [Accessibility article](https://r-vellum.github.io/vellumplot/) in the
+vellumplot docs for the full treatment, including how the description handles
+faceting and layered marks.
