@@ -89,6 +89,34 @@ would any other output.
 testthat::expect_match(plot_alt(p), "flipper length")
 ```
 
-See the [Accessibility article](https://r-vellum.github.io/vellumplot/) in the
-vellumplot docs for the full treatment, including how the description handles
-faceting and layered marks.
+## The summary follows the plot
+
+Change the structure of the plot and the generated description changes with it.
+Split the same scatter across islands with `facet_wrap()` and the last sentence
+now names the faceting variable, so the auto text stays true to what is drawn
+even when you have not written any alt text of your own.
+
+```{r}
+p_facet <- vplot(pen) |>
+  mark_point(x = flipper_length_mm, y = body_mass_g, color = species, size = 1.6) |>
+  facet_wrap(~island) |>
+  labs(title = "Body mass by island",
+       x = "flipper length (mm)", y = "body mass (g)", color = "species")
+```
+
+```{r}
+#| echo: false
+vg(p_facet, "accessibility-facet")
+```
+
+```{r}
+plot_alt(p_facet)
+```
+
+The facets carry a fact the pooled scatter hid: Gentoo turns up only on Biscoe,
+Torgersen holds nothing but Adelie, and Dream mixes Adelie with Chinstrap. That
+is the kind of thing a `labs(alt = ...)` string should say, since the generated
+sentence reports the layout but not what the layout reveals.
+
+See the [Accessibility article](https://r-vellum.github.io/vellumplot/articles/accessibility.html) in the
+vellumplot docs for more details.
