@@ -1,0 +1,83 @@
+---
+title: "A big scatter that stays interactive"
+description: "120,000 points you can still hover, brush, and zoom. Past 20,000 keyed marks, as_widget() draws the scene once as an image and runs every interaction off a compact index."
+categories: [Interactive, Big data]
+image: figs/big-interactive.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+```
+
+`mark_datashade()` handles a million points by binning them into a grid and
+shading each cell by how many points land in it. You get the shape of the
+cloud, but the individual point is gone, so there is nothing to hover and no way
+to brush a few of them out.
+
+`as_widget()` takes a different route that keeps every point addressable. Once a
+plot passes 20,000 keyed elements it stops writing one SVG node per point. A
+150,000-point scatter used to ship a 75 MB file with 150,000 DOM nodes and
+stutter on every hover. Now the scene is drawn once as a single embedded image,
+and hover, brush, and pan/zoom run off a compact index of bounding boxes and
+keys. The page holds a picture and a lookup table in place of the nodes.
+
+Here are 120,000 points in six colour groups, each spread across a few tight
+sub-blobs. Hover a point for its label, drag to brush a region, scroll to zoom,
+and click a legend swatch to isolate one group. It is a static HTML file with no
+server behind it.
+
+```{r}
+set.seed(42)
+groups <- c("Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta")
+per_group <- 20000L
+
+make_group <- function(gi) {
+  nb <- 7L
+  bx <- runif(nb, -9, 9)
+  by <- runif(nb, -9, 9)
+  b <- sample(nb, per_group, replace = TRUE)
+  data.frame(
+    x = bx[b] + rnorm(per_group, 0, 0.55),
+    y = by[b] + rnorm(per_group, 0, 0.55),
+    group = groups[gi]
+  )
+}
+
+df <- do.call(rbind, lapply(seq_along(groups), make_group))
+df$group <- factor(df$group, levels = groups)
+df$id <- seq_len(nrow(df))
+
+p <- vplot(df) |>
+  mark_point(
+    x = x, y = y, color = group, data_id = id,
+    tooltip = paste0(group, " · point #", id), size = 1
+  ) |>
+  labs(title = "120,000 points, still interactive")
+```
+
+```{r}
+#| include: false
+render_plot(p, "figs/big-interactive.png", dpi = 150)
+```
+
+```{r}
+as_widget(p, height = 520)
+```
+
+## When the image path kicks in
+
+The switch is automatic. The default `mode = "auto"` counts the keyed elements
+and moves to the image path above `raster_threshold`, which is 20,000; anything
+smaller keeps the per-element SVG it always used. Pass `mode = "svg"` or
+`mode = "raster"` to force one path.
+
+Zooming stays sharp. The base image is anti-aliased for the full view, and when
+you zoom in the widget redraws just the visible points on a canvas overlay,
+reading each point's colour from the rendered image and its position from the
+index. A zoomed region resolves into crisp points rather than a blurry upscale.
+
+What you give up: with no node per point, per-element grammar colours and
+per-mark screen-reader focus no longer apply, and crosstalk's cross-filter is
+off. The trade is a fast, navigable cloud in place of 120,000 live DOM elements.
