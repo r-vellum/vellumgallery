@@ -52,7 +52,7 @@ df$id <- seq_len(nrow(df))
 p <- vplot(df) |>
   mark_point(
     x = x, y = y, color = group, data_id = id,
-    tooltip = paste0(group, " · point #", id), size = 1
+    tooltip = paste0(group, " · point #", id), size = 0.6
   ) |>
   labs(title = "120,000 points, still interactive")
 ```
@@ -63,7 +63,7 @@ render_plot(p, "figs/big-interactive.png", dpi = 150)
 ```
 
 ```{r}
-as_widget(p, height = 520)
+as_widget(p, height = 820)
 ```
 
 ## When the image path kicks in
