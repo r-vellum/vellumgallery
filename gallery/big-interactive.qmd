@@ -31,6 +31,7 @@ server behind it.
 ```{r}
 set.seed(42)
 groups <- c("Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta")
+
 per_group <- 20000L
 
 make_group <- function(gi) {
