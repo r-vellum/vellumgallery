@@ -538,6 +538,7 @@
     const selectedColor = c.selected_color != null ? asColumn(c.selected_color) : null;
     const legendFor = c.legend_for != null ? asColumn(c.legend_for) : null;
     const legend = c.legend != null ? asColumn(c.legend) : null;
+    const filterValue = c.filter_value != null ? asColumn(c.filter_value) : null;
     const out = new Array(n);
     for (let i = 0; i < n; i++) {
       const e = { key: String(key[i]) };
@@ -554,9 +555,14 @@
         const v = legend[i];
         if (v != null && !(Array.isArray(v) && v.length === 0)) e.legend = v;
       }
+      if (filterValue && typeof filterValue[i] === "number") e.filter_value = filterValue[i];
       out[i] = e;
     }
     return out;
+  }
+  function normalizePanels(raw) {
+    if (raw == null) return [];
+    return Array.isArray(raw) ? raw : [raw];
   }
   function brushKeys(elems, brush) {
     const out = [];
@@ -569,6 +575,39 @@
       }
     }
     return out;
+  }
+  function pointInPolygon(x, y, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      if (yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  function lassoKeys(elems, poly) {
+    const out = [];
+    const seen = {};
+    if (poly.length < 3) return out;
+    for (let i = 0; i < elems.length; i++) {
+      const e = elems[i];
+      if (!hasBbox(e) || seen[e.key]) continue;
+      if (pointInPolygon((e.x0 + e.x1) / 2, (e.y0 + e.y1) / 2, poly)) {
+        seen[e.key] = true;
+        out.push(e.key);
+      }
+    }
+    return out;
+  }
+  function polyBounds(poly) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < poly.length; i++) {
+      if (poly[i].x < x0) x0 = poly[i].x;
+      if (poly[i].y < y0) y0 = poly[i].y;
+      if (poly[i].x > x1) x1 = poly[i].x;
+      if (poly[i].y > y1) y1 = poly[i].y;
+    }
+    return { x0, y0, x1, y1 };
   }
   function nearestKey(elems, x, y, maxDist) {
     let best = null;
@@ -583,6 +622,57 @@
       }
     }
     return best;
+  }
+  function nearestSortedIdx(sorted, target) {
+    const n = sorted.length;
+    if (!n) return -1;
+    let lo = 0;
+    let hi = n - 1;
+    while (lo < hi) {
+      const mid = lo + hi >> 1;
+      if (sorted[mid] < target) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0 && Math.abs(sorted[lo - 1] - target) <= Math.abs(sorted[lo] - target)) return lo - 1;
+    return lo;
+  }
+  function columnTolerance(sorted) {
+    let minGap = Infinity;
+    for (let i = 1; i < sorted.length; i++) {
+      const g = sorted[i] - sorted[i - 1];
+      if (g > 1e-6 && g < minGap) minGap = g;
+    }
+    return isFinite(minGap) ? minGap / 2 : 1;
+  }
+  var INVERTIBLE = { identity: true, log10: true, sqrt: true, reverse: true };
+  function canInvert(ax) {
+    return !!ax && INVERTIBLE[ax.transform] === true;
+  }
+  function nativeToData(ax, nv) {
+    switch (ax.transform) {
+      case "log10":
+        return Math.pow(10, nv);
+      case "sqrt":
+        return nv * nv;
+      case "reverse":
+        return nv;
+      // identity map; the reversal is the decreasing domain
+      default:
+        return nv;
+    }
+  }
+  function pxToDataX(p, px) {
+    const ax = p.x;
+    if (!canInvert(ax) || p.px1 === p.px0) return null;
+    const nv = ax.native_lo + (px - p.px0) / (p.px1 - p.px0) * (ax.native_hi - ax.native_lo);
+    return nativeToData(ax, nv);
+  }
+  function pxToDataY(p, py) {
+    const ax = p.y;
+    if (!canInvert(ax) || p.py1 === p.py0) return null;
+    const frac = (py - p.py0) / (p.py1 - p.py0);
+    const nv = ax.native_hi + frac * (ax.native_lo - ax.native_hi);
+    return nativeToData(ax, nv);
   }
   function zoomViewBox(vb, factor, cx, cy) {
     const w = vb.w / factor;
@@ -603,6 +693,44 @@
   }
   function userToCanvas(vb, cw, ch, x, y) {
     return { px: (x - vb.x) / vb.w * cw, py: (y - vb.y) / vb.h * ch };
+  }
+  function viewToPan(vb, vb0) {
+    const sx = vb.w ? vb0.w / vb.w : 1;
+    const sy = vb.h ? vb0.h / vb.h : 1;
+    return { sx, sy, tx: vb0.x - vb.x * sx, ty: vb0.y - vb.y * sy };
+  }
+  function panToView(vb, vb0, x, y) {
+    const t = viewToPan(vb, vb0);
+    return { x: t.sx ? vb.x + (x - vb0.x) / t.sx : x, y: t.sy ? vb.y + (y - vb0.y) / t.sy : y };
+  }
+  function niceTicks(lo, hi, count) {
+    if (!isFinite(lo) || !isFinite(hi) || hi <= lo || count < 1) return [];
+    const step0 = (hi - lo) / count;
+    const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+    const norm = step0 / mag;
+    const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+    const out = [];
+    for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) {
+      out.push(Math.round(v / step) * step);
+    }
+    return out;
+  }
+  function fmtTick(v, step) {
+    if (v === 0) return "0";
+    const decimals = Math.min(20, Math.max(0, -Math.floor(Math.log10(Math.abs(step)) + 1e-9)));
+    let s = v.toFixed(decimals);
+    if (s.indexOf(".") >= 0) s = s.replace(/\.?0+$/, "");
+    return s;
+  }
+  function dataToNative(ax, d) {
+    switch (ax.transform) {
+      case "log10":
+        return Math.log10(d);
+      case "sqrt":
+        return Math.sqrt(d);
+      default:
+        return d;
+    }
   }
   function unionBbox(elems, keys) {
     let out = null;
@@ -635,6 +763,13 @@
 .vellumwidget-root.vellumwidget-panning .vellumwidget-svg-holder svg { cursor: grabbing; }
 .vellumwidget-root [data-key] { cursor: pointer; }
 [data-key].vellumwidget-filtered { display: none; }
+/* Legend click-to-hide / -mute (independent of the crosstalk cross-filter above,
+   so the two never clobber each other). hidden removes the series' marks; muted
+   keeps them but fades them right back; legend-off dims the toggled-off swatch
+   so the legend shows which series are on. */
+[data-key].vellumwidget-legend-hidden { display: none; }
+[data-key].vellumwidget-legend-muted { opacity: 0.12; }
+[data-key].vellumwidget-legend.vellumwidget-legend-off { opacity: 0.4; }
 .vellumwidget-hovering [data-key]:not(.vellumwidget-legend) { opacity: var(--vellumwidget-dim-opacity, 0.28); }
 .vellumwidget-hovering [data-key].vellumwidget-hl { opacity: 1; }
 /* Large-scene hover: instead of the CSS rule above restyling every keyed node
@@ -650,6 +785,39 @@
 .vellumwidget-dim-layer {
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 5; overflow: visible;
+}
+/* Continuous colorbar filter: an overlay on the gradient bar. The dim rects cover
+   the out-of-range ends; the handles are draggable. Out-of-range marks fade. */
+.vellumwidget-colorbar-layer {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 6; overflow: visible;
+}
+.vellumwidget-cb-dim { fill: rgba(255,255,255,0.66); pointer-events: none; }
+@media (prefers-color-scheme: dark) { .vellumwidget-cb-dim { fill: rgba(17,24,39,0.66); } }
+.vellumwidget-cb-handle {
+  fill: #ffffff; stroke: #2563eb; stroke-width: 1.5px; pointer-events: auto;
+}
+.vellumwidget-root.vellumwidget-cb-v .vellumwidget-cb-handle { cursor: ns-resize; }
+.vellumwidget-root.vellumwidget-cb-h .vellumwidget-cb-handle { cursor: ew-resize; }
+[data-key].vellumwidget-colorfiltered { opacity: var(--vellumwidget-colorfilter-opacity, 0.12); }
+/* Crosshair guide rule(s) for unified hover \u2014 above the base image / canvas,
+   below the highlight rings so a highlighted mark still reads on top. */
+.vellumwidget-crosshair-layer {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 4; overflow: visible;
+}
+/* Axis-aware zoom: re-ticked axis LABELS overlay (gridlines are drawn inside the
+   base svg's panel, under the marks). Pinned to the fixed base coordinate space. */
+.vellumwidget-retick-layer {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 3; overflow: visible;
+}
+.vellumwidget-crosshair-line {
+  stroke: var(--vellumwidget-crosshair-stroke, rgba(75,85,99,0.85));
+  stroke-width: 1px; stroke-dasharray: 4 3;
+}
+@media (prefers-color-scheme: dark) {
+  .vellumwidget-crosshair-line { stroke: var(--vellumwidget-crosshair-stroke, rgba(209,213,219,0.85)); }
 }
 /* Raster-mode feedback rings (hover / selection), drawn on the overlay since the
    marks are a base image with no per-element nodes. Colours reuse the same CSS
@@ -694,9 +862,40 @@
   opacity: 0; transition: opacity 0.08s ease; will-change: transform;
 }
 .vellumwidget-tip.vellumwidget-show { opacity: 1; }
+/* Sticky tooltip: accepts pointer events so links/buttons inside it are usable. */
+.vellumwidget-tip.vellumwidget-tip-sticky { pointer-events: auto; }
 .vellumwidget-brush {
   position: absolute; pointer-events: none; z-index: 15;
   border: 1px solid #2563eb; background: rgba(37,99,235,0.12); display: none;
+}
+/* Overview navigator: a full-width strip below the plot (a squashed mini-render
+   of the whole scene) with a draggable/resizable window marking the visible x-range. */
+.vellumwidget-nav {
+  position: relative; width: 100%; margin-top: 4px; box-sizing: border-box;
+  border: 1px solid rgba(0,0,0,0.12); border-radius: 4px; overflow: hidden;
+  background: rgba(0,0,0,0.02); touch-action: none; user-select: none;
+}
+.vellumwidget-nav-mini { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.85; }
+.vellumwidget-nav-mini svg { width: 100%; height: 100%; display: block; }
+/* The two regions outside the window are dimmed; the window itself is clear. */
+.vellumwidget-nav-window {
+  position: absolute; top: 0; bottom: 0; z-index: 2; cursor: grab;
+  border-left: 1px solid #2563eb; border-right: 1px solid #2563eb;
+  background: rgba(37,99,235,0.10); box-shadow: 0 0 0 100vmax rgba(0,0,0,0.12);
+}
+.vellumwidget-nav-window.vellumwidget-nav-grabbing { cursor: grabbing; }
+.vellumwidget-nav-handle {
+  position: absolute; top: 0; bottom: 0; width: 8px; z-index: 3; cursor: ew-resize;
+  background: #2563eb; opacity: 0.35;
+}
+.vellumwidget-nav-handle-l { left: -1px; }
+.vellumwidget-nav-handle-r { right: -1px; }
+@media (prefers-color-scheme: dark) {
+  .vellumwidget-nav { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.03); }
+}
+.vellumwidget-root.vellumwidget-mode-lasso .vellumwidget-svg-holder svg { cursor: crosshair; }
+.vellumwidget-lasso {
+  fill: rgba(37,99,235,0.10); stroke: #2563eb; stroke-width: 1px; stroke-dasharray: 4 3;
 }
 .vellumwidget-toolbar {
   position: absolute; top: 6px; right: 6px; z-index: 25; display: flex; gap: 2px;
@@ -768,6 +967,12 @@
       if (members[i].token !== sender) members[i].onSelect(keys);
     }
   }
+  function busPublishView(group, sender, v) {
+    const members = vellumwidgetBus[group] || [];
+    for (let i = 0; i < members.length; i++) {
+      if (members[i].token !== sender && members[i].onView) members[i].onView(v);
+    }
+  }
   function getCrosstalk() {
     return window.crosstalk || null;
   }
@@ -785,10 +990,21 @@
       let stage = null;
       let svgEl = null;
       let toolbarEl = null;
+      let navEl = null;
+      let navWindow = null;
+      let colorbar = null;
+      let colorbarLayer = null;
+      let colorRange = null;
+      let colorHiddenSet = {};
       let meta = {};
       let groups = {};
       let legendIndex = {};
+      let legendSwatch = {};
+      let legendOff = {};
+      let hiddenKeySet = {};
+      let filteredKeySet = {};
       let elements = [];
+      let panels = [];
       let selected = {};
       let nodesByKey = {};
       let hoverRAF = 0;
@@ -797,6 +1013,13 @@
       const DIM_OVERLAY_MIN = 2e3;
       let largeDim = false;
       let dimLayer = null;
+      let crosshairLayer = null;
+      let sortedCx = [];
+      let sortedCxKeys = [];
+      let sortedCy = [];
+      let sortedCyKeys = [];
+      let tolX = 1;
+      let tolY = 1;
       let rasterMode = false;
       let selGroup = null;
       let hovGroup = null;
@@ -813,11 +1036,15 @@
         hover: true,
         select: true,
         brush: true,
+        lasso: true,
         zoom: true,
         toolbar: true,
         nearest: true,
         a11y: true,
-        selectMode: "multiple"
+        selectMode: "multiple",
+        hoverMode: "closest",
+        crosshair: false,
+        navigator: false
       };
       let liveRegion = null;
       let tableEl = null;
@@ -825,10 +1052,31 @@
       let focusIdx = -1;
       let vb0 = null;
       let vb = null;
+      let panGroup = null;
+      let outerPanelGroup = null;
+      let axisPanel = null;
+      let axisZoomActive = false;
+      let retickLayer = null;
+      let retickGrid = null;
+      let xZoom = false;
+      const axisStyle = {
+        // presentation scraped from vellum's own axis/grid nodes so the re-tick matches the theme
+        textFill: "#333333",
+        fontFamily: "sans-serif",
+        fontSize: 12,
+        gridStroke: "#ffffff",
+        gridWidth: 1,
+        xBaselineY: 0,
+        yLabelX: 0
+        // device-px placement of the x/y tick labels
+      };
       let mode = "brush";
       let lastBrush = null;
+      let lassoPts = [];
+      let lassoEl = null;
       const selfToken = {};
       let group = null;
+      let receivingView = false;
       let joined = false;
       let ctSel = null;
       let ctFilt = null;
@@ -848,6 +1096,11 @@
         const fx = r.width ? (clientX - r.left) / r.width : 0;
         const fy = r.height ? (clientY - r.top) / r.height : 0;
         return { x: view.x + fx * view.w, y: view.y + fy * view.h };
+      }
+      function toView(clientX, clientY) {
+        const u = toUser(clientX, clientY);
+        if (axisZoomActive && vb && vb0) return panToView(vb, vb0, u.x, u.y);
+        return u;
       }
       function elementsForKey(k) {
         const cached = nodesByKey[k];
@@ -872,6 +1125,42 @@
         const g = m && m.hover_group;
         return g && groups[g] ? groups[g] : [k];
       }
+      function legendPolicy() {
+        return opts.legendClick || "select";
+      }
+      function swatchSeries(k) {
+        if (k == null) return null;
+        const m = meta[k];
+        return m && m.legend_for != null ? m.legend_for : null;
+      }
+      function applyLegend() {
+        clearClass("vellumwidget-legend-hidden");
+        clearClass("vellumwidget-legend-muted");
+        clearClass("vellumwidget-legend-off");
+        hiddenKeySet = {};
+        const pol = legendPolicy();
+        if (pol === "select") return;
+        const cls = pol === "mute" ? "vellumwidget-legend-muted" : "vellumwidget-legend-hidden";
+        for (const s in legendOff) {
+          if (!legendOff[s]) continue;
+          const members = legendIndex[s] || [];
+          addClassForKeys(members, cls);
+          if (pol === "hide") for (let i = 0; i < members.length; i++) hiddenKeySet[members[i]] = true;
+          addClassForKeys(legendSwatch[s] || [], "vellumwidget-legend-off");
+        }
+      }
+      function legendToggle(series) {
+        legendOff[series] = !legendOff[series];
+        applyLegend();
+      }
+      function legendIsolate(series) {
+        const all = Object.keys(legendIndex);
+        const others = all.filter((s) => s !== series);
+        const isolated = !legendOff[series] && others.every((s) => legendOff[s]);
+        legendOff = {};
+        if (!isolated) for (let i = 0; i < others.length; i++) legendOff[others[i]] = true;
+        applyLegend();
+      }
       function buildSpatialIndex() {
         spatialIndex = null;
         indexToElem = [];
@@ -887,6 +1176,40 @@
         }
         idx.finish();
         spatialIndex = idx;
+      }
+      function buildHoverAxis() {
+        const cx = [];
+        const cy = [];
+        for (let i = 0; i < elements.length; i++) {
+          const e = elements[i];
+          if (!hasBbox(e)) continue;
+          cx.push({ c: (e.x0 + e.x1) / 2, k: e.key });
+          cy.push({ c: (e.y0 + e.y1) / 2, k: e.key });
+        }
+        cx.sort((a, b) => a.c - b.c);
+        cy.sort((a, b) => a.c - b.c);
+        sortedCx = cx.map((p) => p.c);
+        sortedCxKeys = cx.map((p) => p.k);
+        sortedCy = cy.map((p) => p.c);
+        sortedCyKeys = cy.map((p) => p.k);
+        tolX = columnTolerance(sortedCx);
+        tolY = columnTolerance(sortedCy);
+      }
+      function nearestAxisKey(axis, coord) {
+        const sorted = axis === "x" ? sortedCx : sortedCy;
+        const keys = axis === "x" ? sortedCxKeys : sortedCyKeys;
+        const i = nearestSortedIdx(sorted, coord);
+        return i >= 0 ? keys[i] : null;
+      }
+      function columnKeys(primary, axis) {
+        const m = meta[primary];
+        if (!m || !hasBbox(m)) return [primary];
+        const cx = (m.x0 + m.x1) / 2;
+        const cy = (m.y0 + m.y1) / 2;
+        const SPAN = 1e7;
+        const rect = axis === "x" ? { x0: cx - tolX, x1: cx + tolX, y0: -SPAN, y1: SPAN } : { x0: -SPAN, x1: SPAN, y0: cy - tolY, y1: cy + tolY };
+        const ks = brushKeysIn(rect);
+        return ks.length ? ks : [primary];
       }
       function nearestKeyAt(x, y, maxDist) {
         if (spatialIndex) {
@@ -905,6 +1228,23 @@
           if (!seen[k]) {
             seen[k] = true;
             out.push(k);
+          }
+        }
+        return out;
+      }
+      function lassoKeysIn(poly) {
+        if (poly.length < 3) return [];
+        if (!spatialIndex) return lassoKeys(elements, poly);
+        const b = polyBounds(poly);
+        const eids = spatialIndex.search(b.x0, b.y0, b.x1, b.y1).map((id) => indexToElem[id]).sort((a, b2) => a - b2);
+        const out = [];
+        const seen = {};
+        for (let i = 0; i < eids.length; i++) {
+          const e = elements[eids[i]];
+          if (seen[e.key] || !hasBbox(e)) continue;
+          if (pointInPolygon((e.x0 + e.x1) / 2, (e.y0 + e.y1) / 2, poly)) {
+            seen[e.key] = true;
+            out.push(e.key);
           }
         }
         return out;
@@ -1061,9 +1401,8 @@
           if (c) hovGroup.appendChild(c);
         }
       }
-      function setHover(k) {
+      function setHoverKeys(keys) {
         if (!opts.hover) return;
-        const keys = linkedKeys(k);
         if (rasterMode) {
           drawHovFeedback(keys);
           return;
@@ -1073,22 +1412,139 @@
         if (largeDim) showHighlightOverlay(keys);
         else el.classList.add("vellumwidget-hovering");
       }
+      function setHover(k) {
+        setHoverKeys(linkedKeys(k));
+      }
+      function crosshairLine(x1, y1, x2, y2) {
+        const l = document.createElementNS(SVGNS, "line");
+        l.setAttribute("x1", String(x1));
+        l.setAttribute("y1", String(y1));
+        l.setAttribute("x2", String(x2));
+        l.setAttribute("y2", String(y2));
+        l.setAttribute("class", "vellumwidget-crosshair-line");
+        l.setAttribute("vector-effect", "non-scaling-stroke");
+        return l;
+      }
+      function clearCrosshair() {
+        if (crosshairLayer) while (crosshairLayer.firstChild) crosshairLayer.removeChild(crosshairLayer.firstChild);
+      }
+      function drawCrosshair(k, hm) {
+        clearCrosshair();
+        if (!crosshairLayer) return;
+        const m = meta[k];
+        if (!m || !hasBbox(m)) return;
+        const view = vb || vb0;
+        if (!view) return;
+        const cx = (m.x0 + m.x1) / 2;
+        const cy = (m.y0 + m.y1) / 2;
+        const x0 = view.x, x1 = view.x + view.w, y0 = view.y, y1 = view.y + view.h;
+        if (hm !== "y") crosshairLayer.appendChild(crosshairLine(cx, y0, cx, y1));
+        if (hm !== "x") crosshairLayer.appendChild(crosshairLine(x0, cy, x1, cy));
+      }
+      let tipShowTimer = 0;
+      let tipHideTimer = 0;
+      function tipDelay() {
+        const d = opts.tooltipDelay;
+        return typeof d === "number" && d > 0 ? d : 0;
+      }
+      function markClient(k) {
+        const m = meta[k];
+        if (!m || !hasBbox(m) || !svgEl || typeof svgEl.getScreenCTM !== "function") return null;
+        const ctm = svgEl.getScreenCTM();
+        if (!ctm || typeof svgEl.createSVGPoint !== "function") return null;
+        const p = svgEl.createSVGPoint();
+        p.x = (m.x0 + m.x1) / 2;
+        p.y = (m.y0 + m.y1) / 2;
+        const s = p.matrixTransform(ctm);
+        return { x: s.x, y: s.y };
+      }
+      function placeTip(clientX, clientY, anchorKey) {
+        const box = el.getBoundingClientRect();
+        let ax = clientX - box.left;
+        let ay = clientY - box.top;
+        if (opts.tooltipFollow === false && anchorKey) {
+          const c = markClient(anchorKey);
+          if (c) {
+            ax = c.x - box.left;
+            ay = c.y - box.top;
+          }
+        }
+        const tw = tip.offsetWidth || 0;
+        const th = tip.offsetHeight || 0;
+        const below = ay - th - 12 < 0;
+        if (tw && box.width) ax = Math.max(tw / 2, Math.min(box.width - tw / 2, ax));
+        tip.style.transform = "translate(" + Math.round(ax) + "px," + Math.round(ay) + "px) " + (below ? "translate(-50%, 12px)" : "translate(-50%, calc(-100% - 12px))");
+      }
+      function revealTip(build, clientX, clientY, anchorKey) {
+        if (tipHideTimer) {
+          clearTimeout(tipHideTimer);
+          tipHideTimer = 0;
+        }
+        const doShow = () => {
+          tipShowTimer = 0;
+          build();
+          placeTip(clientX, clientY, anchorKey);
+          tip.classList.add("vellumwidget-show");
+        };
+        const d = tipDelay();
+        if (d > 0 && !tip.classList.contains("vellumwidget-show")) {
+          if (tipShowTimer) clearTimeout(tipShowTimer);
+          tipShowTimer = setTimeout(doShow, d);
+        } else {
+          doShow();
+        }
+      }
       function showTip(clientX, clientY, k) {
         const m = meta[k];
-        tip.innerHTML = sanitizeTip(m && m.tooltip || k);
-        const box = el.getBoundingClientRect();
-        tip.style.transform = "translate(" + Math.round(clientX - box.left) + "px," + Math.round(clientY - box.top) + "px) translate(-50%, calc(-100% - 12px))";
-        tip.classList.add("vellumwidget-show");
+        revealTip(() => {
+          tip.innerHTML = sanitizeTip(m && m.tooltip || k);
+        }, clientX, clientY, k);
+      }
+      const TIP_MULTI_CAP = 30;
+      function showTipMulti(clientX, clientY, keys) {
+        revealTip(() => {
+          const rows = [];
+          for (let i = 0; i < keys.length && rows.length < TIP_MULTI_CAP; i++) {
+            const m = meta[keys[i]];
+            rows.push(sanitizeTip(m && m.tooltip || keys[i]));
+          }
+          if (keys.length > TIP_MULTI_CAP) rows.push("\u2026");
+          tip.innerHTML = rows.join("<br>");
+        }, clientX, clientY, keys[0] || null);
       }
       function hideTip() {
+        if (tipShowTimer) {
+          clearTimeout(tipShowTimer);
+          tipShowTimer = 0;
+        }
+        if (tipHideTimer) {
+          clearTimeout(tipHideTimer);
+          tipHideTimer = 0;
+        }
         tip.classList.remove("vellumwidget-show");
+      }
+      function scheduleHideTip() {
+        if (tipShowTimer) {
+          clearTimeout(tipShowTimer);
+          tipShowTimer = 0;
+        }
+        if (opts.tooltipSticky) {
+          if (tipHideTimer) clearTimeout(tipHideTimer);
+          tipHideTimer = setTimeout(() => {
+            tipHideTimer = 0;
+            tip.classList.remove("vellumwidget-show");
+          }, 260);
+        } else {
+          tip.classList.remove("vellumwidget-show");
+        }
       }
       function clearHover() {
         if (rasterMode) clearGroup(hovGroup);
         if (largeDim) hideHighlightOverlay();
         el.classList.remove("vellumwidget-hovering");
         clearClass("vellumwidget-hl");
-        hideTip();
+        clearCrosshair();
+        scheduleHideTip();
         shinyInput("hover", null);
       }
       function shinyInput(event, value, opts2) {
@@ -1147,13 +1603,23 @@
       }
       function applyFilter(showKeys) {
         clearClass("vellumwidget-filtered");
+        filteredKeySet = {};
         if (showKeys == null) return;
         const show = {};
         for (let i = 0; i < showKeys.length; i++) show[showKeys[i]] = true;
         for (let i = 0; i < elements.length; i++) {
           const key = elements[i].key;
-          if (!show[key]) addClassForKeys([key], "vellumwidget-filtered");
+          if (!show[key]) {
+            addClassForKeys([key], "vellumwidget-filtered");
+            filteredKeySet[key] = true;
+          }
         }
+      }
+      function inert(k) {
+        return !!hiddenKeySet[k] || !!filteredKeySet[k] || !!colorHiddenSet[k];
+      }
+      function dropInert(keys) {
+        return keys.filter((k) => !inert(k));
       }
       function proxyCall(method, args) {
         const keys = Array.isArray(args) ? args : args == null ? [] : [String(args)];
@@ -1193,7 +1659,7 @@
       function setupLinking() {
         if (joined) return;
         joined = true;
-        if (group) busJoin(group, { token: selfToken, onSelect: applyLinkedSelection });
+        if (group) busJoin(group, { token: selfToken, onSelect: applyLinkedSelection, onView: applyLinkedView });
         const ct = getCrosstalk();
         if (opts.crosstalk && ct) {
           ctSel = new ct.SelectionHandle(opts.crosstalk);
@@ -1206,10 +1672,112 @@
           });
         }
       }
+      function panelAt(x, y) {
+        for (let i = 0; i < panels.length; i++) {
+          const p = panels[i];
+          if (x >= p.px0 && x <= p.px1 && y >= p.py0 && y <= p.py1) return p;
+        }
+        return panels.length === 1 ? panels[0] : null;
+      }
+      function dataRangeOf(p, dx0, dy0, dx1, dy1) {
+        const out = { panel: p.name };
+        if (p.x) {
+          const a = pxToDataX(p, dx0), b = pxToDataX(p, dx1);
+          if (a != null && b != null) out.x = [Math.min(a, b), Math.max(a, b)];
+        }
+        if (p.y) {
+          const a = pxToDataY(p, dy0), b = pxToDataY(p, dy1);
+          if (a != null && b != null) out.y = [Math.min(a, b), Math.max(a, b)];
+        }
+        return out.x || out.y ? out : null;
+      }
+      function brushDataFields(bb) {
+        const p = panelAt((bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2);
+        if (!p) return {};
+        const d = dataRangeOf(p, bb.x0, bb.y0, bb.x1, bb.y1);
+        if (!d) return {};
+        const f = { panel: d.panel };
+        if (d.x) {
+          f.x0d = d.x[0];
+          f.x1d = d.x[1];
+        }
+        if (d.y) {
+          f.y0d = d.y[0];
+          f.y1d = d.y[1];
+        }
+        return f;
+      }
+      function reportView() {
+        if (!vb) return;
+        const payload = { x: vb.x, y: vb.y, w: vb.w, h: vb.h, zoomed: vb0 ? isZoomedIn(vb, vb0) : false };
+        if (panels.length === 1) {
+          let d;
+          if (axisZoomActive && vb0) {
+            const p = panels[0];
+            const a = panToView(vb, vb0, p.px0, p.py0);
+            const b = panToView(vb, vb0, p.px1, p.py1);
+            d = dataRangeOf(p, a.x, a.y, b.x, b.y);
+          } else {
+            d = dataRangeOf(panels[0], vb.x, vb.y, vb.x + vb.w, vb.y + vb.h);
+          }
+          if (d) payload.data = d;
+        }
+        shinyInput("zoom", payload);
+        if (group && vb0 && !receivingView && vb0.w && vb0.h) {
+          busPublishView(group, selfToken, {
+            x: (vb.x - vb0.x) / vb0.w,
+            y: (vb.y - vb0.y) / vb0.h,
+            w: vb.w / vb0.w,
+            h: vb.h / vb0.h
+          });
+        }
+      }
+      function applyLinkedView(v) {
+        if (!vb0) return;
+        const next = {
+          x: vb0.x + v.x * vb0.w,
+          y: vb0.y + v.y * vb0.h,
+          w: v.w * vb0.w,
+          h: v.h * vb0.h
+        };
+        if (!(next.w > 0) || !(next.h > 0)) return;
+        if (vb && Math.abs(next.x - vb.x) < 1e-6 && Math.abs(next.y - vb.y) < 1e-6 && Math.abs(next.w - vb.w) < 1e-6 && Math.abs(next.h - vb.h) < 1e-6) return;
+        receivingView = true;
+        vb = next;
+        applyViewBox();
+        receivingView = false;
+      }
+      function applyAspect() {
+        const par = xZoom && !axisZoomActive ? "none" : "xMidYMid meet";
+        if (svgEl) svgEl.setAttribute("preserveAspectRatio", par);
+        if (dimLayer) dimLayer.setAttribute("preserveAspectRatio", par);
+        if (crosshairLayer) crosshairLayer.setAttribute("preserveAspectRatio", par);
+        if (colorbarLayer) colorbarLayer.setAttribute("preserveAspectRatio", par);
+      }
       function applyViewBox() {
-        if (svgEl && vb) svgEl.setAttribute("viewBox", fmtViewBox(vb));
+        if (xZoom && vb && vb0) {
+          vb.y = vb0.y;
+          vb.h = vb0.h;
+        }
+        if (axisZoomActive && panGroup && vb && vb0) {
+          const t = viewToPan(vb, vb0);
+          panGroup.setAttribute(
+            "transform",
+            "matrix(" + t.sx + " 0 0 " + t.sy + " " + t.tx + " " + t.ty + ")"
+          );
+          if (svgEl) svgEl.setAttribute("viewBox", fmtViewBox(vb0));
+          retick();
+        } else if (svgEl && vb) {
+          svgEl.setAttribute("viewBox", fmtViewBox(vb));
+        }
         if (dimLayer && vb) dimLayer.setAttribute("viewBox", fmtViewBox(vb));
+        if (crosshairLayer && vb) crosshairLayer.setAttribute("viewBox", fmtViewBox(vb));
+        if (colorbarLayer && (vb || vb0)) {
+          colorbarLayer.setAttribute("viewBox", fmtViewBox(axisZoomActive && vb0 ? vb0 : vb));
+        }
         drawPoints();
+        updateNav();
+        if (dragging !== "pan" && pinchDist === 0) reportView();
       }
       function resetZoom() {
         if (vb0) {
@@ -1226,6 +1794,402 @@
         vb = { x: rect.x0 - px, y: rect.y0 - py, w: w + 2 * px, h: h + 2 * py };
         applyViewBox();
       }
+      function isLinearAxis(ax) {
+        return !!ax && ax.type === "continuous" && (ax.transform === "identity" || ax.transform === "reverse");
+      }
+      function setupAxisZoom() {
+        panGroup = null;
+        outerPanelGroup = null;
+        axisPanel = null;
+        axisZoomActive = false;
+        if (retickLayer) {
+          retickLayer.remove();
+          retickLayer = null;
+        }
+        retickGrid = null;
+        if (!opts.axisZoom || rasterMode || !svgEl || !vb0 || !stage || panels.length !== 1) return;
+        const p = panels[0];
+        if (!isLinearAxis(p.x) || !isLinearAxis(p.y)) return;
+        const pan = svgEl.querySelector('[data-vellum-pan="' + cssEscape(p.name) + '"]');
+        const outer = svgEl.querySelector('[data-vellum-panel="' + cssEscape(p.name) + '"]');
+        if (!pan || !outer) return;
+        panGroup = pan;
+        outerPanelGroup = outer;
+        axisPanel = p;
+        axisZoomActive = true;
+        scrapeAxisStyle(p);
+        hideStaticAxes();
+        retickGrid = document.createElementNS(SVGNS, "g");
+        retickGrid.setAttribute("class", "vellumwidget-retick-grid");
+        outer.insertBefore(retickGrid, pan);
+        retickLayer = document.createElementNS(SVGNS, "svg");
+        retickLayer.setAttribute("class", "vellumwidget-retick-layer");
+        retickLayer.setAttribute("aria-hidden", "true");
+        retickLayer.setAttribute("viewBox", fmtViewBox(vb0));
+        stage.appendChild(retickLayer);
+        const t = viewToPan(vb || vb0, vb0);
+        panGroup.setAttribute(
+          "transform",
+          "matrix(" + t.sx + " 0 0 " + t.sy + " " + t.tx + " " + t.ty + ")"
+        );
+        retick();
+      }
+      function transTranslate(node) {
+        const t = node.getAttribute("transform") || "";
+        const m = /matrix\(\s*[-\d.eE]+\s+[-\d.eE]+\s+[-\d.eE]+\s+[-\d.eE]+\s+([-\d.eE]+)\s+([-\d.eE]+)\s*\)/.exec(t) || /translate\(\s*([-\d.eE]+)[ ,]+([-\d.eE]+)\s*\)/.exec(t);
+        return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]) } : { tx: 0, ty: 0 };
+      }
+      function scrapeAxisStyle(p) {
+        if (!svgEl) return;
+        const xText = svgEl.querySelector('[data-vellum-panel^="axis-x"] text');
+        if (xText) {
+          axisStyle.textFill = xText.getAttribute("fill") || axisStyle.textFill;
+          axisStyle.fontFamily = xText.getAttribute("font-family") || axisStyle.fontFamily;
+          const fs = parseFloat(xText.getAttribute("font-size") || "");
+          if (fs) axisStyle.fontSize = fs;
+          const y = parseFloat(xText.getAttribute("y") || "");
+          axisStyle.xBaselineY = isFinite(y) ? transTranslate(xText).ty + y : p.py1 + axisStyle.fontSize;
+        } else {
+          axisStyle.xBaselineY = p.py1 + axisStyle.fontSize;
+        }
+        const yText = svgEl.querySelector('[data-vellum-panel^="axis-y"] text');
+        if (yText) {
+          const x = parseFloat(yText.getAttribute("x") || "");
+          axisStyle.yLabelX = isFinite(x) ? transTranslate(yText).tx + x : p.px0 - 6;
+        } else {
+          axisStyle.yLabelX = p.px0 - 6;
+        }
+        const grid = svgEl.querySelector('[role="grid"] path, [role="grid"] line');
+        if (grid) {
+          axisStyle.gridStroke = grid.getAttribute("stroke") || axisStyle.gridStroke;
+          const sw = parseFloat(grid.getAttribute("stroke-width") || "");
+          if (sw) axisStyle.gridWidth = sw;
+        }
+      }
+      function hideStaticAxes() {
+        if (!svgEl) return;
+        const hide = svgEl.querySelectorAll(
+          '[role="grid"], [data-vellum-panel^="axis-x"], [data-vellum-panel^="axis-y"]'
+        );
+        for (let i = 0; i < hide.length; i++) hide[i].style.display = "none";
+      }
+      function gridLine(x1, y1, x2, y2) {
+        const l = document.createElementNS(SVGNS, "line");
+        l.setAttribute("x1", String(x1));
+        l.setAttribute("y1", String(y1));
+        l.setAttribute("x2", String(x2));
+        l.setAttribute("y2", String(y2));
+        l.setAttribute("stroke", axisStyle.gridStroke);
+        l.setAttribute("stroke-width", String(axisStyle.gridWidth));
+        return l;
+      }
+      function axisLabel(text, x, y, anchor, baseline) {
+        const t = document.createElementNS(SVGNS, "text");
+        t.setAttribute("x", String(x));
+        t.setAttribute("y", String(y));
+        t.setAttribute("fill", axisStyle.textFill);
+        t.setAttribute("font-family", axisStyle.fontFamily);
+        t.setAttribute("font-size", String(axisStyle.fontSize));
+        t.setAttribute("text-anchor", anchor);
+        t.setAttribute("dominant-baseline", baseline);
+        t.textContent = text;
+        return t;
+      }
+      function retick() {
+        if (!axisZoomActive || !axisPanel || !vb || !vb0 || !retickGrid || !retickLayer) return;
+        const p = axisPanel;
+        while (retickGrid.firstChild) retickGrid.removeChild(retickGrid.firstChild);
+        while (retickLayer.firstChild) retickLayer.removeChild(retickLayer.firstChild);
+        const t = viewToPan(vb, vb0);
+        const cTL = panToView(vb, vb0, p.px0, p.py0);
+        const cBR = panToView(vb, vb0, p.px1, p.py1);
+        if (p.x) {
+          const a = pxToDataX(p, cTL.x), b = pxToDataX(p, cBR.x);
+          if (a != null && b != null) {
+            const lo = Math.min(a, b), hi = Math.max(a, b);
+            const ticks = niceTicks(lo, hi, 5);
+            const step = ticks.length > 1 ? ticks[1] - ticks[0] : hi - lo;
+            const nlo = p.x.native_lo, nhi = p.x.native_hi;
+            for (let i = 0; i < ticks.length; i++) {
+              const nx = dataToNative(p.x, ticks[i]);
+              const px = p.px0 + (nx - nlo) / (nhi - nlo) * (p.px1 - p.px0);
+              const sx = t.sx * px + t.tx;
+              if (sx < p.px0 - 0.5 || sx > p.px1 + 0.5) continue;
+              retickGrid.appendChild(gridLine(sx, p.py0, sx, p.py1));
+              retickLayer.appendChild(
+                axisLabel(fmtTick(ticks[i], step), sx, axisStyle.xBaselineY, "middle", "text-before-edge")
+              );
+            }
+          }
+        }
+        if (p.y) {
+          const a = pxToDataY(p, cTL.y), b = pxToDataY(p, cBR.y);
+          if (a != null && b != null) {
+            const lo = Math.min(a, b), hi = Math.max(a, b);
+            const ticks = niceTicks(lo, hi, 5);
+            const step = ticks.length > 1 ? ticks[1] - ticks[0] : hi - lo;
+            const nlo = p.y.native_lo, nhi = p.y.native_hi;
+            for (let i = 0; i < ticks.length; i++) {
+              const ny = dataToNative(p.y, ticks[i]);
+              const py = p.py0 + (nhi - ny) / (nhi - nlo) * (p.py1 - p.py0);
+              const sy = t.sy * py + t.ty;
+              if (sy < p.py0 - 0.5 || sy > p.py1 + 0.5) continue;
+              retickGrid.appendChild(gridLine(p.px0, sy, p.px1, sy));
+              retickLayer.appendChild(
+                axisLabel(fmtTick(ticks[i], step), axisStyle.yLabelX, sy, "end", "central")
+              );
+            }
+          }
+        }
+      }
+      function navToView(xFrac, wFrac) {
+        if (!vb0) return;
+        wFrac = Math.min(1, Math.max(0.02, wFrac));
+        xFrac = Math.min(1 - wFrac, Math.max(0, xFrac));
+        const w = wFrac * vb0.w;
+        if (xZoom) {
+          vb = { x: vb0.x + xFrac * vb0.w, y: vb0.y, w, h: vb0.h };
+        } else {
+          const cy = vb ? vb.y + vb.h / 2 : vb0.y + vb0.h / 2;
+          const h = wFrac * vb0.h;
+          vb = { x: vb0.x + xFrac * vb0.w, y: cy - h / 2, w, h };
+        }
+        applyViewBox();
+      }
+      function updateNav() {
+        if (!navWindow || !vb || !vb0 || !vb0.w) return;
+        const xFrac = (vb.x - vb0.x) / vb0.w;
+        const wFrac = vb.w / vb0.w;
+        navWindow.style.left = xFrac * 100 + "%";
+        navWindow.style.width = wFrac * 100 + "%";
+      }
+      function buildNavigator() {
+        if (navEl) {
+          navEl.remove();
+          navEl = null;
+          navWindow = null;
+        }
+        if (!opts.navigator || !svgEl || !vb0) return;
+        const h = opts.navigatorHeight && opts.navigatorHeight > 0 ? opts.navigatorHeight : 56;
+        navEl = document.createElement("div");
+        navEl.className = "vellumwidget-nav";
+        navEl.style.height = h + "px";
+        navEl.setAttribute("aria-hidden", "true");
+        const mini = document.createElement("div");
+        mini.className = "vellumwidget-nav-mini";
+        const clone = svgEl.cloneNode(true);
+        clone.setAttribute("viewBox", fmtViewBox(vb0));
+        clone.setAttribute("preserveAspectRatio", "none");
+        clone.removeAttribute("width");
+        clone.removeAttribute("height");
+        const defs = clone.querySelector("defs");
+        if (defs) defs.remove();
+        const clipped = clone.querySelectorAll("[clip-path]");
+        for (let i = 0; i < clipped.length; i++) clipped[i].removeAttribute("clip-path");
+        const keyed = clone.querySelectorAll("[data-key],[tabindex],[role]");
+        for (let i = 0; i < keyed.length; i++) {
+          keyed[i].removeAttribute("data-key");
+          keyed[i].removeAttribute("tabindex");
+          keyed[i].removeAttribute("role");
+        }
+        clone.removeAttribute("id");
+        mini.appendChild(clone);
+        navEl.appendChild(mini);
+        navWindow = document.createElement("div");
+        navWindow.className = "vellumwidget-nav-window";
+        const hL = document.createElement("div");
+        hL.className = "vellumwidget-nav-handle vellumwidget-nav-handle-l";
+        const hR = document.createElement("div");
+        hR.className = "vellumwidget-nav-handle vellumwidget-nav-handle-r";
+        navWindow.appendChild(hL);
+        navWindow.appendChild(hR);
+        navEl.appendChild(navWindow);
+        el.appendChild(navEl);
+        wireNavigator(hL, hR);
+        updateNav();
+      }
+      function wireNavigator(hL, hR) {
+        if (!navEl || !navWindow) return;
+        let mode2 = "";
+        let startFracX = 0, startFracW = 0, startPointer = 0;
+        const stripFrac = (clientX) => {
+          const r = navEl.getBoundingClientRect();
+          return r.width ? (clientX - r.left) / r.width : 0;
+        };
+        const onMove = (ev) => {
+          if (!mode2 || !vb0) return;
+          const d = stripFrac(ev.clientX) - startPointer;
+          if (mode2 === "pan") navToView(startFracX + d, startFracW);
+          else if (mode2 === "l") {
+            const nx = startFracX + d;
+            navToView(nx, startFracW + (startFracX - nx));
+          } else if (mode2 === "r") navToView(startFracX, startFracW + d);
+        };
+        const onUp = (ev) => {
+          mode2 = "";
+          navWindow.classList.remove("vellumwidget-nav-grabbing");
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("pointercancel", onUp);
+          if (ev && ev.target.releasePointerCapture) {
+          }
+        };
+        const start = (m) => (ev) => {
+          if (!vb0) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          mode2 = m;
+          startFracX = (vb.x - vb0.x) / vb0.w;
+          startFracW = vb.w / vb0.w;
+          startPointer = stripFrac(ev.clientX);
+          if (m === "pan") navWindow.classList.add("vellumwidget-nav-grabbing");
+          window.addEventListener("pointermove", onMove);
+          window.addEventListener("pointerup", onUp);
+          window.addEventListener("pointercancel", onUp);
+        };
+        navWindow.addEventListener("pointerdown", start("pan"));
+        hL.addEventListener("pointerdown", start("l"));
+        hR.addEventListener("pointerdown", start("r"));
+      }
+      function cbPos(v) {
+        const cb = colorbar;
+        const t = cb.hi === cb.lo ? 0 : (v - cb.lo) / (cb.hi - cb.lo);
+        if (cb.orientation === "h") {
+          const f2 = cb.reverse ? 1 - t : t;
+          return cb.x0 + f2 * (cb.x1 - cb.x0);
+        }
+        const f = cb.reverse ? t : 1 - t;
+        return cb.y0 + f * (cb.y1 - cb.y0);
+      }
+      function cbValueAt(pos) {
+        const cb = colorbar;
+        if (cb.orientation === "h") {
+          let f2 = cb.x1 === cb.x0 ? 0 : (pos - cb.x0) / (cb.x1 - cb.x0);
+          const t2 = cb.reverse ? 1 - f2 : f2;
+          return cb.lo + t2 * (cb.hi - cb.lo);
+        }
+        let f = cb.y1 === cb.y0 ? 0 : (pos - cb.y0) / (cb.y1 - cb.y0);
+        const t = cb.reverse ? f : 1 - f;
+        return cb.lo + t * (cb.hi - cb.lo);
+      }
+      function cbRect(x, y, w, h, cls) {
+        const r = document.createElementNS(SVGNS, "rect");
+        r.setAttribute("x", String(x));
+        r.setAttribute("y", String(y));
+        r.setAttribute("width", String(Math.max(0, w)));
+        r.setAttribute("height", String(Math.max(0, h)));
+        r.setAttribute("class", cls);
+        return r;
+      }
+      function drawColorbarControl() {
+        if (!colorbarLayer) return;
+        while (colorbarLayer.firstChild) colorbarLayer.removeChild(colorbarLayer.firstChild);
+        if (!colorbar || !colorRange) return;
+        const cb = colorbar;
+        const pa = cbPos(colorRange.a);
+        const pb = cbPos(colorRange.b);
+        const lo = Math.min(pa, pb);
+        const hi = Math.max(pa, pb);
+        const mkHandle = (pos, which) => {
+          const H = 4;
+          const r = cb.orientation === "h" ? cbRect(pos - H / 2, cb.y0 - 2, H, cb.y1 - cb.y0 + 4, "vellumwidget-cb-handle") : cbRect(cb.x0 - 2, pos - H / 2, cb.x1 - cb.x0 + 4, H, "vellumwidget-cb-handle");
+          r.setAttribute("vector-effect", "non-scaling-stroke");
+          r.setAttribute("data-cb", which);
+          return r;
+        };
+        if (cb.orientation === "h") {
+          colorbarLayer.appendChild(cbRect(cb.x0, cb.y0, lo - cb.x0, cb.y1 - cb.y0, "vellumwidget-cb-dim"));
+          colorbarLayer.appendChild(cbRect(hi, cb.y0, cb.x1 - hi, cb.y1 - cb.y0, "vellumwidget-cb-dim"));
+        } else {
+          colorbarLayer.appendChild(cbRect(cb.x0, cb.y0, cb.x1 - cb.x0, lo - cb.y0, "vellumwidget-cb-dim"));
+          colorbarLayer.appendChild(cbRect(cb.x0, hi, cb.x1 - cb.x0, cb.y1 - hi, "vellumwidget-cb-dim"));
+        }
+        colorbarLayer.appendChild(mkHandle(pa, "a"));
+        colorbarLayer.appendChild(mkHandle(pb, "b"));
+      }
+      function applyColorFilter() {
+        clearClass("vellumwidget-colorfiltered");
+        colorHiddenSet = {};
+        if (!colorbar || !colorRange) {
+          shinyInput("colorfilter", null);
+          return;
+        }
+        const a = colorRange.a;
+        const b = colorRange.b;
+        const full = a <= colorbar.lo + 1e-9 && b >= colorbar.hi - 1e-9;
+        if (!full) {
+          const outKeys = [];
+          for (let i = 0; i < elements.length; i++) {
+            const e = elements[i];
+            if (typeof e.filter_value === "number" && (e.filter_value < a || e.filter_value > b) && !colorHiddenSet[e.key]) {
+              colorHiddenSet[e.key] = true;
+              outKeys.push(e.key);
+            }
+          }
+          addClassForKeys(outKeys, "vellumwidget-colorfiltered");
+        }
+        shinyInput("colorfilter", full ? null : [a, b]);
+      }
+      function setColorRange(a, b) {
+        if (!colorbar) return;
+        const lo = colorbar.lo, hi = colorbar.hi;
+        a = Math.min(hi, Math.max(lo, a));
+        b = Math.min(hi, Math.max(lo, b));
+        colorRange = { a: Math.min(a, b), b: Math.max(a, b) };
+        drawColorbarControl();
+        applyColorFilter();
+      }
+      function buildColorbar() {
+        if (colorbarLayer) {
+          colorbarLayer.remove();
+          colorbarLayer = null;
+        }
+        colorHiddenSet = {};
+        colorRange = null;
+        el.classList.remove("vellumwidget-cb-v", "vellumwidget-cb-h");
+        if (!colorbar || rasterMode || !stage) return;
+        colorbarLayer = document.createElementNS(SVGNS, "svg");
+        colorbarLayer.setAttribute("class", "vellumwidget-colorbar-layer");
+        colorbarLayer.setAttribute("aria-hidden", "true");
+        if (vb0) colorbarLayer.setAttribute("viewBox", fmtViewBox(vb0));
+        stage.appendChild(colorbarLayer);
+        el.classList.add(colorbar.orientation === "h" ? "vellumwidget-cb-h" : "vellumwidget-cb-v");
+        colorRange = { a: colorbar.lo, b: colorbar.hi };
+        drawColorbarControl();
+        wireColorbar();
+      }
+      function wireColorbar() {
+        if (!colorbarLayer) return;
+        let dragWhich = "";
+        const onMove = (ev) => {
+          if (!dragWhich || !colorbar || !colorRange) return;
+          const u = toUser(ev.clientX, ev.clientY);
+          const v = cbValueAt(colorbar.orientation === "h" ? u.x : u.y);
+          if (dragWhich === "a") setColorRange(v, colorRange.b);
+          else setColorRange(colorRange.a, v);
+        };
+        const onUp = () => {
+          dragWhich = "";
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("pointercancel", onUp);
+        };
+        colorbarLayer.addEventListener("pointerdown", function(ev) {
+          const w = ev.target.getAttribute && ev.target.getAttribute("data-cb");
+          if (w !== "a" && w !== "b") return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          dragWhich = w;
+          window.addEventListener("pointermove", onMove);
+          window.addEventListener("pointerup", onUp);
+          window.addEventListener("pointercancel", onUp);
+        });
+        colorbarLayer.addEventListener("dblclick", function(ev) {
+          if (!colorbar) return;
+          ev.preventDefault();
+          setColorRange(colorbar.lo, colorbar.hi);
+        });
+      }
       function positionBrush(x, y, w, h) {
         brushBox.style.left = x + "px";
         brushBox.style.top = y + "px";
@@ -1236,22 +2200,62 @@
       function hideBrush() {
         brushBox.style.display = "none";
       }
+      function lassoPointsAttr() {
+        let s = "";
+        for (let i = 0; i < lassoPts.length; i++) s += (i ? " " : "") + lassoPts[i].x + "," + lassoPts[i].y;
+        return s;
+      }
+      function updateLassoPath() {
+        if (!crosshairLayer) return;
+        if (!lassoEl) {
+          lassoEl = document.createElementNS(SVGNS, "polygon");
+          lassoEl.setAttribute("class", "vellumwidget-lasso");
+          lassoEl.setAttribute("vector-effect", "non-scaling-stroke");
+          crosshairLayer.appendChild(lassoEl);
+        }
+        lassoEl.setAttribute("points", lassoPointsAttr());
+      }
+      function clearLasso() {
+        lassoPts = [];
+        if (lassoEl && lassoEl.parentNode) lassoEl.parentNode.removeChild(lassoEl);
+        lassoEl = null;
+      }
       let down = null;
       let dragging = "";
       let movedDuringDrag = false;
       const pointers = /* @__PURE__ */ new Map();
       let pinchDist = 0;
       function hoverAt(k, clientX, clientY) {
+        if (k != null && inert(k)) k = null;
         if (k == null) {
           clearHover();
           return;
         }
         shinyInput("hover", k);
-        setHover(k);
-        if (opts.tooltip) showTip(clientX, clientY, k);
+        const hm = opts.hoverMode || "closest";
+        if (hm === "x" || hm === "y") {
+          const keys = dropInert(columnKeys(k, hm));
+          if (!keys.length) {
+            clearHover();
+            return;
+          }
+          setHoverKeys(keys);
+          if (opts.crosshair) drawCrosshair(k, hm);
+          if (opts.tooltip) showTipMulti(clientX, clientY, keys);
+        } else {
+          const keys = dropInert(linkedKeys(k));
+          if (!keys.length) {
+            clearHover();
+            return;
+          }
+          setHoverKeys(keys);
+          if (opts.crosshair) drawCrosshair(k, "closest");
+          if (opts.tooltip) showTip(clientX, clientY, k);
+        }
       }
       function onHoverMove(ev) {
         if (down || pinchDist > 0) return;
+        const hm = opts.hoverMode || "closest";
         const k = keyOf(ev.target);
         if (k != null) {
           if (hoverRAF) {
@@ -1261,7 +2265,7 @@
           hoverAt(k, ev.clientX, ev.clientY);
           return;
         }
-        if (!opts.nearest || !elements.length) {
+        if (!elements.length || hm === "closest" && !opts.nearest) {
           clearHover();
           return;
         }
@@ -1270,9 +2274,12 @@
         if (hoverRAF) return;
         hoverRAF = requestAnimationFrame(function() {
           hoverRAF = 0;
-          const u = toUser(cx, cy);
-          const rad = vb ? vb.w * 0.02 : 8;
-          hoverAt(nearestKeyAt(u.x, u.y, rad), cx, cy);
+          const u = toView(cx, cy);
+          let seed;
+          if (hm === "x") seed = nearestAxisKey("x", u.x);
+          else if (hm === "y") seed = nearestAxisKey("y", u.y);
+          else seed = nearestKeyAt(u.x, u.y, vb ? vb.w * 0.02 : 8);
+          hoverAt(seed, cx, cy);
         });
       }
       function onDragMove(ev) {
@@ -1283,7 +2290,7 @@
           const pts = Array.from(pointers.values());
           const d = Math.hypot(pts[0].cx - pts[1].cx, pts[0].cy - pts[1].cy);
           if (d > 0) {
-            const u = toUser((pts[0].cx + pts[1].cx) / 2, (pts[0].cy + pts[1].cy) / 2);
+            const u = toView((pts[0].cx + pts[1].cx) / 2, (pts[0].cy + pts[1].cy) / 2);
             vb = zoomViewBox(vb, d / pinchDist, u.x, u.y);
             applyViewBox();
             pinchDist = d;
@@ -1293,8 +2300,9 @@
         if (!down) return;
         if (!dragging) {
           if (Math.abs(ev.clientX - down.cx) + Math.abs(ev.clientY - down.cy) <= DRAG_THRESHOLD) return;
-          dragging = mode === "pan" && opts.zoom ? "pan" : opts.brush ? "brush" : "";
+          dragging = mode === "pan" && opts.zoom ? "pan" : mode === "lasso" && opts.lasso ? "lasso" : opts.brush ? "brush" : "";
           if (dragging === "pan") el.classList.add("vellumwidget-panning");
+          if (dragging === "lasso") lassoPts = [{ x: down.ux, y: down.uy }];
           if (dragging === "") return;
           movedDuringDrag = true;
         }
@@ -1306,12 +2314,15 @@
             Math.abs(ev.clientX - down.cx),
             Math.abs(ev.clientY - down.cy)
           );
+        } else if (dragging === "lasso" && vb) {
+          lassoPts.push(toView(ev.clientX, ev.clientY));
+          updateLassoPath();
         } else if (dragging === "pan" && vb) {
-          const u = toUser(ev.clientX, ev.clientY);
+          const u = toView(ev.clientX, ev.clientY);
           vb.x -= u.x - down.ux;
           vb.y -= u.y - down.uy;
           applyViewBox();
-          const u2 = toUser(ev.clientX, ev.clientY);
+          const u2 = toView(ev.clientX, ev.clientY);
           down.ux = u2.x;
           down.uy = u2.y;
         }
@@ -1331,7 +2342,7 @@
           el.classList.remove("vellumwidget-panning");
           return;
         }
-        const u = toUser(ev.clientX, ev.clientY);
+        const u = toView(ev.clientX, ev.clientY);
         down = { cx: ev.clientX, cy: ev.clientY, ux: u.x, uy: u.y };
         dragging = "";
         movedDuringDrag = false;
@@ -1350,11 +2361,12 @@
           dragging = "";
           el.classList.remove("vellumwidget-panning");
           hideBrush();
+          reportView();
           return;
         }
         if (dragging === "brush" && down) {
-          const p1 = toUser(down.cx, down.cy);
-          const p2 = toUser(ev.clientX, ev.clientY);
+          const p1 = toView(down.cx, down.cy);
+          const p2 = toView(ev.clientX, ev.clientY);
           const rect = {
             x0: Math.min(p1.x, p2.x),
             y0: Math.min(p1.y, p2.y),
@@ -1362,11 +2374,28 @@
             y1: Math.max(p1.y, p2.y)
           };
           lastBrush = rect;
-          const hitKeys = brushKeysIn(rect);
+          const hitKeys = dropInert(brushKeysIn(rect));
           if (opts.select) setSelection(hitKeys);
-          shinyInput("brush", { keys: hitKeys, x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 }, { priority: "event" });
+          shinyInput("brush", Object.assign(
+            { keys: hitKeys, x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 },
+            brushDataFields(rect)
+          ), { priority: "event" });
           hideBrush();
+        } else if (dragging === "lasso") {
+          const poly = lassoPts.slice();
+          const hitKeys = dropInert(lassoKeysIn(poly));
+          if (poly.length >= 3) {
+            const b = polyBounds(poly);
+            lastBrush = b;
+            if (opts.select) setSelection(hitKeys);
+            shinyInput("brush", Object.assign(
+              { keys: hitKeys, x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, lasso: true },
+              brushDataFields(b)
+            ), { priority: "event" });
+          }
+          clearLasso();
         }
+        if (dragging === "pan") reportView();
         el.classList.remove("vellumwidget-panning");
         down = null;
         dragging = "";
@@ -1378,11 +2407,17 @@
         }
         let k = keyOf(ev.target);
         if (k == null && rasterMode && opts.nearest !== false && elements.length) {
-          const u = toUser(ev.clientX, ev.clientY);
+          const u = toView(ev.clientX, ev.clientY);
           const rad = vb ? vb.w * 0.02 : 8;
           k = nearestKeyAt(u.x, u.y, rad);
+          if (k != null && inert(k)) k = null;
         }
         shinyInput("click", { key: k }, { priority: "event" });
+        const series = swatchSeries(k);
+        if (series != null && legendPolicy() !== "select") {
+          if (!(ev.detail && ev.detail >= 2)) legendToggle(series);
+          return;
+        }
         if (k != null) {
           if (opts.select) toggleSelect(k);
         } else {
@@ -1390,10 +2425,14 @@
           lastBrush = null;
         }
       }
+      function onDblClick(ev) {
+        const series = swatchSeries(keyOf(ev.target));
+        if (series != null && legendPolicy() !== "select") legendIsolate(series);
+      }
       function onWheel(ev) {
         if (!opts.zoom || !vb) return;
         ev.preventDefault();
-        const u = toUser(ev.clientX, ev.clientY);
+        const u = toView(ev.clientX, ev.clientY);
         const factor = ev.deltaY < 0 ? 1.2 : 1 / 1.2;
         vb = zoomViewBox(vb, factor, u.x, u.y);
         applyViewBox();
@@ -1422,8 +2461,14 @@
             return;
           }
           if (ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") {
-            if (opts.select) toggleSelect(k);
-            announce(a11yLabel(k) + (selected[k] ? ", selected" : ", not selected"));
+            const series = swatchSeries(k);
+            if (series != null && legendPolicy() !== "select") {
+              legendToggle(series);
+              announce(a11yLabel(k) + (legendOff[series] ? ", hidden" : ", shown"));
+            } else {
+              if (opts.select) toggleSelect(k);
+              announce(a11yLabel(k) + (selected[k] ? ", selected" : ", not selected"));
+            }
             ev.preventDefault();
             return;
           }
@@ -1468,17 +2513,35 @@
           ev.preventDefault();
         }
       }
+      const MODE_ICON = { brush: "\u25AD", lasso: "\u25CC", pan: "\u270B" };
+      const MODE_LABEL = { brush: "brush-select", lasso: "lasso-select", pan: "pan" };
+      function availableModes() {
+        const m = [];
+        if (opts.brush) m.push("brush");
+        if (opts.lasso) m.push("lasso");
+        if (opts.zoom) m.push("pan");
+        return m;
+      }
       function setMode(m) {
         mode = m;
         el.classList.toggle("vellumwidget-mode-pan", m === "pan");
+        el.classList.toggle("vellumwidget-mode-lasso", m === "lasso");
+        if (m !== "lasso") clearLasso();
         if (toolbarEl) {
           const b = toolbarEl.querySelector('[data-act="mode"]');
           if (b) {
-            b.textContent = m === "pan" ? "\u270B" : "\u25AD";
-            b.title = m === "pan" ? "Pan mode (click to brush-select)" : "Brush-select mode (click to pan)";
-            b.classList.toggle("vellumwidget-active", m === "pan");
+            const modes = availableModes();
+            const next = modes[(modes.indexOf(m) + 1) % modes.length];
+            b.textContent = MODE_ICON[m];
+            b.title = MODE_LABEL[m][0].toUpperCase() + MODE_LABEL[m].slice(1) + " mode" + (next && next !== m ? " (click for " + MODE_LABEL[next] + ")" : "");
+            b.classList.toggle("vellumwidget-active", m !== "brush");
           }
         }
+      }
+      function cycleMode() {
+        const modes = availableModes();
+        if (modes.length < 2) return;
+        setMode(modes[(modes.indexOf(mode) + 1) % modes.length]);
       }
       function exportName() {
         const n = opts.export && opts.export.filename;
@@ -1581,7 +2644,7 @@
           bar.appendChild(b);
           return b;
         };
-        if (opts.brush && opts.zoom) btn("mode", "\u25AD", "Brush-select mode (click to pan)", () => setMode(mode === "brush" ? "pan" : "brush"));
+        if (availableModes().length >= 2) btn("mode", MODE_ICON[mode], "Drag mode", cycleMode);
         if (opts.zoom) {
           btn("zoomsel", "\u2316", "Zoom to selection", zoomToSelection);
           btn("reset", "\u27F2", "Reset zoom", resetZoom);
@@ -1665,7 +2728,7 @@
         const dir = i < focusIdx ? -1 : 1;
         if (i < 0) i = 0;
         if (i >= focusables.length) i = focusables.length - 1;
-        while (focusables[i] && focusables[i].node.classList.contains("vellumwidget-filtered")) {
+        while (focusables[i] && inert(focusables[i].key)) {
           i += dir;
           if (i < 0 || i >= focusables.length) return;
         }
@@ -1777,6 +2840,7 @@
         svg.addEventListener("pointerleave", clearHover);
         svg.addEventListener("pointerdown", onDown);
         svg.addEventListener("click", onClick);
+        svg.addEventListener("dblclick", onDblClick);
         if (opts.zoom) svg.addEventListener("wheel", onWheel, { passive: false });
         if (opts.zoom || opts.brush) el.classList.add("vellumwidget-gesture");
         el.setAttribute("tabindex", "0");
@@ -1785,13 +2849,19 @@
       return {
         renderValue: function(x) {
           opts = Object.assign(
-            { tooltip: true, hover: true, select: true, brush: true, zoom: true, toolbar: true, nearest: true, a11y: true, selectMode: "multiple" },
+            { tooltip: true, hover: true, select: true, brush: true, lasso: true, zoom: true, toolbar: true, nearest: true, a11y: true, selectMode: "multiple", hoverMode: "closest", crosshair: false, navigator: false },
             x.options || {}
           );
           elements = normalizeElements(x.elements);
+          panels = normalizePanels(x.panels);
+          colorbar = x.colorbar || null;
           meta = {};
           groups = {};
           legendIndex = {};
+          legendSwatch = {};
+          legendOff = {};
+          hiddenKeySet = {};
+          filteredKeySet = {};
           selected = {};
           lastBrush = null;
           mode = "brush";
@@ -1806,6 +2876,7 @@
                 (legendIndex[series[s]] = legendIndex[series[s]] || []).push(e.key);
               }
             }
+            if (e.legend_for != null) (legendSwatch[e.legend_for] = legendSwatch[e.legend_for] || []).push(e.key);
           }
           if (!holder) {
             stage = document.createElement("div");
@@ -1817,9 +2888,22 @@
             dimLayer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             dimLayer.setAttribute("class", "vellumwidget-dim-layer");
             dimLayer.setAttribute("aria-hidden", "true");
+            crosshairLayer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            crosshairLayer.setAttribute("class", "vellumwidget-crosshair-layer");
+            crosshairLayer.setAttribute("aria-hidden", "true");
+            stage.appendChild(crosshairLayer);
             stage.appendChild(dimLayer);
             el.appendChild(brushBox);
             el.appendChild(tip);
+            tip.addEventListener("pointerenter", function() {
+              if (tipHideTimer) {
+                clearTimeout(tipHideTimer);
+                tipHideTimer = 0;
+              }
+            });
+            tip.addEventListener("pointerleave", function() {
+              hideTip();
+            });
           }
           holder.innerHTML = x.svg;
           svgEl = holder.querySelector("svg");
@@ -1851,6 +2935,8 @@
               dimLayer.appendChild(hovGroup);
             }
             if (dimLayer && vb0) dimLayer.setAttribute("viewBox", fmtViewBox(vb0));
+            if (crosshairLayer && vb0) crosshairLayer.setAttribute("viewBox", fmtViewBox(vb0));
+            clearCrosshair();
             if (rasterMode) {
               ensureCanvas();
               sampleBaseRaster();
@@ -1858,10 +2944,18 @@
               clearPointData();
             }
             buildSpatialIndex();
+            buildHoverAxis();
             wire(svgEl);
             buildToolbar();
-            setMode("brush");
+            buildNavigator();
+            buildColorbar();
+            setupAxisZoom();
+            xZoom = !!opts.navigator && !rasterMode;
+            applyAspect();
+            setMode(availableModes()[0] || "brush");
+            tip.classList.toggle("vellumwidget-tip-sticky", !!opts.tooltipSticky);
             applyStyling();
+            applyLegend();
             setupA11y();
             setupLinking();
             shinyInput("selected", selectedKeys());
@@ -1894,7 +2988,73 @@
           },
           pointCount: function() {
             return ptN;
-          }
+          },
+          hoverMode: function() {
+            return opts.hoverMode || "closest";
+          },
+          columnKeys,
+          nearestAxisKey,
+          legendOff: function() {
+            return Object.keys(legendOff).filter((s) => legendOff[s]);
+          },
+          lassoKeysIn,
+          availableModes,
+          mode: function() {
+            return mode;
+          },
+          inert,
+          dropInert,
+          panelAt,
+          dataRangeOf,
+          brushDataFields,
+          hasNavigator: function() {
+            return !!navEl;
+          },
+          navToView,
+          hasColorbar: function() {
+            return !!colorbarLayer;
+          },
+          setColorRange,
+          colorHidden: function() {
+            return Object.keys(colorHiddenSet);
+          },
+          cbHandleCount: function() {
+            return colorbarLayer ? colorbarLayer.querySelectorAll(".vellumwidget-cb-handle").length : 0;
+          },
+          navWindowFrac: function() {
+            if (!navWindow) return null;
+            return { left: parseFloat(navWindow.style.left) || 0, width: parseFloat(navWindow.style.width) || 0 };
+          },
+          axisZoomActive: function() {
+            return axisZoomActive;
+          },
+          panTransform: function() {
+            return panGroup ? panGroup.getAttribute("transform") : null;
+          },
+          // Re-ticked axis labels (their text + device-px position), for asserting the
+          // re-tick output without a real layout engine.
+          retickLabels: function() {
+            if (!retickLayer) return [];
+            return Array.prototype.map.call(retickLayer.querySelectorAll("text"), function(t) {
+              return { text: t.textContent, x: parseFloat(t.getAttribute("x") || "NaN"), y: parseFloat(t.getAttribute("y") || "NaN") };
+            });
+          },
+          retickGridCount: function() {
+            return retickGrid ? retickGrid.querySelectorAll("line").length : 0;
+          },
+          staticAxesHidden: function() {
+            if (!svgEl) return null;
+            const nodes = svgEl.querySelectorAll('[role="grid"], [data-vellum-panel^="axis-x"], [data-vellum-panel^="axis-y"]');
+            if (!nodes.length) return null;
+            return Array.prototype.every.call(nodes, function(n) {
+              return n.style.display === "none";
+            });
+          },
+          setView: function(nvb) {
+            vb = { x: nvb.x, y: nvb.y, w: nvb.w, h: nvb.h };
+            applyViewBox();
+          },
+          toView
         }
       };
     }
@@ -1930,6 +3090,20 @@
     dispatchProxyCall,
     normalizeElements,
     isZoomedIn,
-    userToCanvas
+    userToCanvas,
+    nearestSortedIdx,
+    columnTolerance,
+    pointInPolygon,
+    lassoKeys,
+    polyBounds,
+    nativeToData,
+    pxToDataX,
+    pxToDataY,
+    normalizePanels,
+    viewToPan,
+    panToView,
+    niceTicks,
+    fmtTick,
+    dataToNative
   };
 })();
