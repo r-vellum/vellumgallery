@@ -21,8 +21,8 @@ render_plot(prev, "figs/declarative-interactivity.png", dpi = 150)
 ```
 
 A vellumplot plot can carry its own interaction. You name a selection with
-`select_point()` or `select_interval()`, then point `condition()`, `filter_by()`,
-or `bind_scale()` at that name. The behaviour rides along with the spec: serialise
+`select_point()` or `select_interval()`, then point `condition()` or
+`filter_by()` at that name. The behaviour rides along with the spec: serialise
 the plot, hand it to a host that understands the declaration, and the gestures
 come alive. `vellumwidget` is one such host. A static render ignores the whole
 block and draws the picture it would have drawn anyway.
