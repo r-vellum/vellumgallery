@@ -1,0 +1,93 @@
+---
+title: "Declarative interactivity"
+description: "Selections live in the plot spec. Name one with select_point() or select_interval(), then drive a spotlight with condition() or cross-filter a second panel with filter_by()."
+categories: [Interactive]
+image: figs/declarative-interactivity.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+
+peng <- na.omit(datasets::penguins)
+peng$id <- seq_len(nrow(peng))
+
+# Static preview for the gallery card: the spotlight plot with nothing hovered,
+# so every point keeps its full colour.
+prev <- vplot(peng) |>
+  mark_point(x = bill_len, y = flipper_len, color = species, size = 2.2)
+render_plot(prev, "figs/declarative-interactivity.png", dpi = 150)
+```
+
+A vellumplot plot can carry its own interaction. You name a selection with
+`select_point()` or `select_interval()`, then point `condition()`, `filter_by()`,
+or `bind_scale()` at that name. The behaviour rides along with the spec: serialise
+the plot, hand it to a host that understands the declaration, and the gestures
+come alive. `vellumwidget` is one such host. A static render ignores the whole
+block and draws the picture it would have drawn anyway.
+
+This replaces the older design, where `as_widget()` took a stack of interaction
+flags (`hover_color`, `dim_opacity`, and the rest). Those arguments are gone.
+Hover, select, brush, and zoom are on by default, and anything richer is
+described on the plot.
+
+## Spotlight a series on hover
+
+`condition()` sets an aesthetic by whether an element belongs to a selection.
+Members take the first value, everyone else takes the second (or the theme's dim
+appearance if you leave it out). Pair it with `select_point(on = "hover")` and
+hovering one point lifts its group clear of the rest.
+
+`group_by = "species"` widens the selection from the single point under the
+cursor to its whole species, so the three clusters light up one at a time.
+
+```{r}
+vplot(peng) |>
+  mark_point(
+    x = bill_len, y = flipper_len,
+    color   = condition("hi", species, "grey80"),
+    data_id = id, tooltip = species, size = 2.4
+  ) |>
+  select_point("hi", on = "hover", group_by = "species") |>
+  labs(title = "Hover to spotlight a species", x = "bill length (mm)", y = "flipper length (mm)") |>
+  as_widget(height = 460)
+```
+
+With nothing hovered every point keeps its colour, because an empty selection
+matches all of them. The dimming starts on the first hover and clears when the
+cursor leaves.
+
+## Brush one panel, filter another
+
+A selection declared on one panel and referenced from another cross-filters.
+`select_interval()` puts a brush on the left scatter; the right scatter's
+`filter_by()` names that same selection. Drag a box on the left and the right
+panel drops to the penguins inside it.
+
+`add_selection()` attaches the shared brush to the panel whose marks feed it;
+`filter_by()` names it on the panel that should react. `concat()` sets the two
+side by side, and `as_widget()` carries the gesture across the seam.
+
+```{r}
+brush <- select_interval("brush", on = "xy")
+
+left <- vplot(peng) |>
+  mark_point(x = bill_len, y = bill_dep, color = species,
+             data_id = id, tooltip = species, size = 2.4) |>
+  add_selection(brush) |>
+  labs(title = "Brush here", x = "bill length (mm)", y = "bill depth (mm)")
+
+right <- vplot(peng) |>
+  mark_point(x = flipper_len, y = body_mass, color = species,
+             data_id = id, tooltip = species, size = 2.4) |>
+  filter_by(brush) |>
+  labs(title = "…and this panel follows", x = "flipper length (mm)", y = "body mass (g)")
+
+concat(left, right, design = "AB") |>
+  as_widget(height = 380)
+```
+
+Both widgets are static HTML with no server behind them. The spec says what a
+gesture means, `vellumwidget` enacts it in the browser, and the same spec sent to
+`render()` for a PNG or SVG leaves the interaction out.

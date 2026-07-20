@@ -30,7 +30,7 @@ vplot(df) |>
   as_widget()
 ```
 
-Colour maps to a discrete variable get an interactive legend for free: hover a
+Map colour to a discrete variable and you get an interactive legend: hover a
 swatch to highlight its series, click to select it.
 
 ```{r}

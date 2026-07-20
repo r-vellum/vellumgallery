@@ -43,9 +43,9 @@ p <- vplot(nc, width = 8, height = 4.6) |>
 
 ## Styling the tooltip
 
-`tooltip_style` is a recent addition: pass a named list to restyle the tooltip
-box without writing CSS. It takes `background` and `color` (any R or CSS colour),
-a `fontsize`, and a `max_width`. Here a warm dark box picks up the gallery's
+`tooltip_style` restyles the tooltip box without any CSS: pass it a named list.
+It takes `background` and `color` (any R or CSS colour), a `fontsize`, and a
+`max_width`. Here a warm dark box picks up the gallery's
 parchment palette in place of the built-in default.
 
 ```{r}
