@@ -1,22 +1,22 @@
 ---
 title: "Flags as image marks"
-description: "mark_image() places a raster at every data point. Here round country-flag PNGs mark each World Cup semi-finalist at its pre-tournament Elo rank — and 2026 stands out as the only edition whose semi-finalists were the world's top four."
+description: "mark_image() places a raster at every data point. Here round country-flag PNGs mark each World Cup semi-finalist at its pre-tournament Elo rank, and 2026 stands out as the only edition whose semi-finalists were the world's top four."
 categories: [Images]
 image: figs/worldcup-flags.png
 ---
 
 `mark_image()` draws a raster image at each `(x, y)` position instead of a point
 or a symbol. You map `src` to a column of file paths, set a `size` (the image
-height, in millimetres — the width follows from the image's aspect ratio), and
+height, in millimetres; the width follows from the image's aspect ratio), and
 every row becomes a little picture on the panel. It is the natural mark when the
-category *is* the picture: logos, faces, icons — or, here, national flags.
+category *is* the picture: logos, faces, icons, or, here, national flags.
 
 The data is every World Cup semi-finalist from 1930 to 2026, placed at the
 **world Elo rank** it held on the eve of the tournament (rank 1 at the top).
 Each team is drawn as a round flag; a thin grey connector spans each
 tournament's best- to worst-ranked semi-finalist. The story reads off the top of
-the chart: 2026 is the only edition where all four flags sit in the top four —
-the semi-finalists *were* the world's four best teams going in.
+the chart: 2026 is the only edition where all four flags sit in the top four.
+The semi-finalists *were* the world's four best teams going in.
 
 ::: {.callout-note}
 This example is **not run** when the site is built: it needs 25 round flag PNGs
@@ -38,11 +38,11 @@ https://cdn.jsdelivr.net/gh/HatScripts/circle-flags/flags/<iso2>.svg
 
 where `<iso2>` is the lowercased ISO 3166-1 alpha-2 code (`es`, `br`, `fr`, …).
 The example expects a **PNG** per team, named by the code used in the data and
-placed in a `flags/` folder next to the document — e.g. `flags/ES.png`,
+placed in a `flags/` folder next to the document, e.g. `flags/ES.png`,
 `flags/BR.png`. Those codes are the uppercased alpha-2 codes, with one
 exception: **England is `gb-eng`** (there is no ISO country for it).
 
-Rasterise with a mask-aware SVG renderer so the circular clip is honoured —
+Rasterise with a mask-aware SVG renderer so the circular clip is honoured.
 [librsvg](https://gitlab.gnome.org/GNOME/librsvg)'s `rsvg-convert` or the R
 [`rsvg`](https://cran.r-project.org/package=rsvg) package both work:
 
@@ -58,7 +58,7 @@ squares, so avoid it for this.
 ```{r}
 #| eval: false
 #| code-fold: true
-#| code-summary: "The data — 92 semi-finalists (year, pre-tournament world rank, team code)"
+#| code-summary: "The data: 92 semi-finalists (year, pre-tournament world rank, team code)"
 sf <- read.csv(text = "world_cup,world_rank,code
 1930,1,AR
 1930,5,UY

@@ -6,7 +6,7 @@ image: figs/swiss-poi-thumb.png
 ---
 
 No basemap, no border, no coastline file. Every bright pixel here is a tagged
-point in OpenStreetMap — a restaurant, a bus stop, a bench, a viewpoint. Plot
+point in OpenStreetMap: a restaurant, a bus stop, a bench, a viewpoint. Plot
 half a million of them and Switzerland draws itself: the cities glow, the lakes
 punch dark holes, and the Alpine valleys thin out to single threads of road.
 
@@ -24,7 +24,7 @@ from [Geofabrik](https://download.geofabrik.de/europe/switzerland.html)
 The raw PBF holds tens of millions of nodes, ways, and relations. We never load
 that into R. DuckDB's `spatial` extension has `ST_ReadOSM()`, which streams the
 file element by element, so the filtering and the Web Mercator projection both
-happen in SQL — R only ever sees the ~528,000 rows that survive. On a laptop the
+happen in SQL. R only ever sees the ~528,000 rows that survive. On a laptop the
 whole extraction takes a couple of seconds.
 
 A point of interest, for this map, is any node carrying an `amenity`, `shop`,
@@ -35,7 +35,7 @@ category from those tags in the same pass.
 
 `mark_datashade()` aggregates the points into a pixel grid and shades each cell
 by density. `how = "eq_hist"` (histogram equalisation) spreads the enormous
-dynamic range — a bench-lined city block versus an empty pass — across the whole
+dynamic range (a bench-lined city block versus an empty pass) across the whole
 colour ramp, so both stay legible instead of the cities blowing out to white.
 
 ![Every tagged POI in Switzerland, datashaded by density](figs/swiss-poi-density.png){fig-alt="Datashaded density map of ~528,000 OpenStreetMap points of interest tracing the shape of Switzerland, cities glowing on a dark ground"}
@@ -46,7 +46,7 @@ Split the same data by category with `facet_wrap()` and each POI type turns out
 to live somewhere different. Transport follows the rail and road network as thin
 connected lines. Tourism scatters up into the Alps where the viewpoints and huts
 are. Shopping, food, and leisure collapse back onto the big cities. Services and
-civic furniture — benches, bins, post boxes — is the densest and the most evenly
+civic furniture (benches, bins, post boxes) is the densest and the most evenly
 spread, which is why it traces the country most completely.
 
 ![The same POIs split into six categories, shared density ramp](figs/swiss-poi-category.png){fig-alt="Six small-multiple datashaded maps of Switzerland, one per POI category, each showing a distinct spatial distribution"}

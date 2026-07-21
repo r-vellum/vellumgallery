@@ -1,9 +1,11 @@
 {
-  "hash": "fb9554a1cfdae3cfcd8d9b57ae5fcf91",
+  "hash": "92a40bb5d0235afab7cee320dacccf34",
   "result": {
     "engine": "knitr",
-    "markdown": "---\ntitle: \"Sankey diagram\"\ndescription: \"A multi-stage energy-flow diagram, with ribbons that fade from their source colour to their target.\"\ncategories: [Flows]\n---\n\n\n\n`vsankey()` builds a layered flow diagram from a *flow list* — one row per flow\nwith a `from` node, a `to` node, and a `value` (the ribbon width). Nodes are the\nunion of `from`/`to`, layered by longest path and ordered within each column to\nminimise ribbon crossings.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nflows <- data.frame(\n  from = c(\n    \"Coal\", \"Gas\", \"Nuclear\", \"Hydro\", \"Wind\",\n    \"Grid\", \"Grid\", \"Grid\",\n    \"Residential\", \"Industry\", \"Commercial\"\n  ),\n  to = c(\n    \"Grid\", \"Grid\", \"Grid\", \"Grid\", \"Grid\",\n    \"Residential\", \"Industry\", \"Commercial\",\n    \"Losses\", \"Losses\", \"Losses\"\n  ),\n  value = c(24, 18, 20, 8, 12, 32, 28, 22, 6, 9, 5)\n)\n\np <- vsankey(\n  flows, from, to, value,\n  show_values = TRUE,\n  flow_color = \"gradient\"\n) |>\n  labs(title = \"Energy supply to end use\")\n```\n:::\n\n\nSetting `flow_color = \"gradient\"` fades each ribbon from its source node's colour\nto its target's, so a flow's origin and destination both read at a glance.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/sankey.png){width=100%}\n:::\n:::\n\n",
-    "supporting": [],
+    "markdown": "---\ntitle: \"Sankey diagram\"\ndescription: \"A multi-stage energy-flow diagram, with ribbons that fade from their source colour to their target.\"\ncategories: [Flows]\n---\n\n\n\n`vsankey()` builds a layered flow diagram from a *flow list*: one row per flow\nwith a `from` node, a `to` node, and a `value` (the ribbon width). Nodes are the\nunion of `from`/`to`, layered by longest path and ordered within each column to\nminimise ribbon crossings.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nflows <- data.frame(\n  from = c(\n    \"Coal\", \"Gas\", \"Nuclear\", \"Hydro\", \"Wind\",\n    \"Grid\", \"Grid\", \"Grid\",\n    \"Residential\", \"Industry\", \"Commercial\"\n  ),\n  to = c(\n    \"Grid\", \"Grid\", \"Grid\", \"Grid\", \"Grid\",\n    \"Residential\", \"Industry\", \"Commercial\",\n    \"Losses\", \"Losses\", \"Losses\"\n  ),\n  value = c(24, 18, 20, 8, 12, 32, 28, 22, 6, 9, 5)\n)\n\np <- vsankey(\n  flows, from, to, value,\n  show_values = TRUE,\n  flow_color = \"gradient\"\n) |>\n  labs(title = \"Energy supply to end use\")\n```\n:::\n\n\nSetting `flow_color = \"gradient\"` fades each ribbon from its source node's colour\nto its target's, so a flow's origin and destination both read at a glance.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/sankey.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [
+      "sankey_files"
+    ],
     "filters": [
       "rmarkdown/pagebreak.lua"
     ],

@@ -9,7 +9,7 @@ categories: [Flows]
 source("_helper.R")
 ```
 
-`vsankey()` builds a layered flow diagram from a *flow list* — one row per flow
+`vsankey()` builds a layered flow diagram from a *flow list*: one row per flow
 with a `from` node, a `to` node, and a `value` (the ribbon width). Nodes are the
 union of `from`/`to`, layered by longest path and ordered within each column to
 minimise ribbon crossings.
