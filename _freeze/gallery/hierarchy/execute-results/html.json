@@ -1,0 +1,15 @@
+{
+  "hash": "64dc6992ff753595c0e68fcc9d65db2a",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Hierarchy diagrams\"\ndescription: \"One tree drawn four ways from the same parent list: sunburst, treemap, circle-pack, and icicle, switched with a single argument.\"\ncategories: [Hierarchies]\n---\n\n\n\n`vhierarchy()` reads a *parent list*: one row per node carrying an `id`, its\n`parent` (`NA` at the root), and a `value` for the leaves. An internal node's\nvalue is the sum of its children, so you only supply the leaves. The `type`\nargument picks the geometry, and nothing else changes, so the same tree can be\nredrawn a different way by editing one word.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nbudget <- data.frame(\n  id = c(\n    \"Budget\",\n    \"Engineering\", \"Sales\", \"Marketing\",\n    \"Frontend\", \"Backend\", \"Infra\",\n    \"Field\", \"Inside\",\n    \"Digital\", \"Events\"\n  ),\n  parent = c(\n    NA,\n    \"Budget\", \"Budget\", \"Budget\",\n    \"Engineering\", \"Engineering\", \"Engineering\",\n    \"Sales\", \"Sales\",\n    \"Marketing\", \"Marketing\"\n  ),\n  value = c(NA, NA, NA, NA, 20, 28, 12, 18, 10, 14, 6)\n)\n```\n:::\n\n\nThe default `type = \"sunburst\"` maps depth to concentric rings and each node's\nangular span to its share of its parent. The root is the centre; `root_label`\nprints its total there.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/hierarchy-sunburst.png){width=100%}\n:::\n:::\n\n\n`type = \"treemap\"` packs the tree into nested rectangles sized by value, using a\nsquarified layout that keeps each rectangle close to square. Every branch keeps\nits own hue, lightened one step per level, and shows as a thin frame around its\nchildren.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/hierarchy-treemap.png){width=100%}\n:::\n:::\n\n\n`type = \"circlepack\"` nests circles instead of rectangles. A leaf's radius grows\nwith the square root of its value, and each branch is the smallest circle that\nencloses its children.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/hierarchy-circlepack.png){width=100%}\n:::\n:::\n\n\n`type = \"icicle\"` is the rectangular twin of the sunburst: depth becomes a stack\nof adjacent bands rather than rings. Set `flow` to run the levels down, up, left,\nor right.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/hierarchy-icicle.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
