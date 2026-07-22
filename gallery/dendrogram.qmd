@@ -1,6 +1,6 @@
 ---
 title: "Dendrogram"
-description: "A hierarchical clustering drawn straight from hclust(), with the tree cut into coloured groups."
+description: "A hierarchical clustering drawn straight from hclust(), cut into coloured groups."
 categories: [Hierarchies]
 ---
 
@@ -9,32 +9,38 @@ categories: [Hierarchies]
 source("_helper.R")
 ```
 
-`vdendrogram()` takes a base `hclust` (or `dendrogram`) and draws it as a
-node-link tree: leaves along the bottom, each merge at its height, joined by
-right-angle brackets. It coerces the clustering to `vgraph()`'s node/edge tables
-under the hood, so the result is an ordinary plot spec.
+`vdendrogram()` draws a base `hclust` (or `dendrogram`) as a node-link tree:
+leaves along one edge, each merge at its height, joined by right-angle brackets.
+It coerces the clustering to `vgraph()`'s node and edge tables, so the result is
+an ordinary plot spec you can theme and render like any other.
+
+Pass `k` to cut the tree with `cutree()` and colour the branches and leaf labels
+by cluster. Branches above the cut, where the clusters join, stay grey.
 
 ```{r}
 hc <- hclust(dist(scale(mtcars)), method = "ward.D2")
+p <- vdendrogram(hc, k = 4)
 ```
-
-`k` cuts the tree with `cutree()` and colours the branches and leaf labels by
-cluster. Branches above the cut, where separate clusters join, stay grey.
 
 ```{r}
 #| echo: false
-vg(vdendrogram(hc, k = 4), "dendrogram-cut", dpi = 150)
+vg(p, "dendrogram-cut", dpi = 150)
 ```
 
-Pass `direction = "right"` to grow the tree sideways, which gives the labels more
-room when there are many leaves.
+With 32 leaves the labels are tight along the bottom. `direction = "right"`
+grows the tree sideways and lays the labels out horizontally, which reads better
+for a long list of leaves.
+
+```{r}
+p <- vdendrogram(hc, k = 4, direction = "right")
+```
 
 ```{r}
 #| echo: false
-vg(vdendrogram(hc, k = 4, direction = "right"), "dendrogram-right", dpi = 150)
+vg(p, "dendrogram-right", dpi = 150)
 ```
 
-For the general case, skip the preset: `vgraph()` accepts the clustering directly
-and `layout = "dendrogram"` reads the merge heights, leaving the marks to you.
-`layout = "unrooted"` (from `graphlayouts`) instead spreads an unrooted tree
-across the plane, the way phylogenies are usually shown.
+For finer control, skip the preset. `vgraph()` takes the clustering directly, and
+`layout = "dendrogram"` reads the merge heights; you then add the marks yourself.
+`layout = "unrooted"` (from `graphlayouts`) instead spreads the tree across the
+plane the way phylogenies are drawn.
