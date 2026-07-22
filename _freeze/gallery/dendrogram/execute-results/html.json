@@ -1,0 +1,15 @@
+{
+  "hash": "40467f40e8aeec048e19074408bf73d3",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Dendrogram\"\ndescription: \"A hierarchical clustering drawn straight from hclust(), with the tree cut into coloured groups.\"\ncategories: [Hierarchies]\n---\n\n\n\n`vdendrogram()` takes a base `hclust` (or `dendrogram`) and draws it as a\nnode-link tree: leaves along the bottom, each merge at its height, joined by\nright-angle brackets. It coerces the clustering to `vgraph()`'s node/edge tables\nunder the hood, so the result is an ordinary plot spec.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nhc <- hclust(dist(scale(mtcars)), method = \"ward.D2\")\n```\n:::\n\n\n`k` cuts the tree with `cutree()` and colours the branches and leaf labels by\ncluster. Branches above the cut, where separate clusters join, stay grey.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/dendrogram-cut.png){width=100%}\n:::\n:::\n\n\nPass `direction = \"right\"` to grow the tree sideways, which gives the labels more\nroom when there are many leaves.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/dendrogram-right.png){width=100%}\n:::\n:::\n\n\nFor the general case, skip the preset: `vgraph()` accepts the clustering directly\nand `layout = \"dendrogram\"` reads the merge heights, leaving the marks to you.\n`layout = \"unrooted\"` (from `graphlayouts`) instead spreads an unrooted tree\nacross the plane, the way phylogenies are usually shown.\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

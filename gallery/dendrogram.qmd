@@ -1,0 +1,40 @@
+---
+title: "Dendrogram"
+description: "A hierarchical clustering drawn straight from hclust(), with the tree cut into coloured groups."
+categories: [Hierarchies]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+`vdendrogram()` takes a base `hclust` (or `dendrogram`) and draws it as a
+node-link tree: leaves along the bottom, each merge at its height, joined by
+right-angle brackets. It coerces the clustering to `vgraph()`'s node/edge tables
+under the hood, so the result is an ordinary plot spec.
+
+```{r}
+hc <- hclust(dist(scale(mtcars)), method = "ward.D2")
+```
+
+`k` cuts the tree with `cutree()` and colours the branches and leaf labels by
+cluster. Branches above the cut, where separate clusters join, stay grey.
+
+```{r}
+#| echo: false
+vg(vdendrogram(hc, k = 4), "dendrogram-cut", dpi = 150)
+```
+
+Pass `direction = "right"` to grow the tree sideways, which gives the labels more
+room when there are many leaves.
+
+```{r}
+#| echo: false
+vg(vdendrogram(hc, k = 4, direction = "right"), "dendrogram-right", dpi = 150)
+```
+
+For the general case, skip the preset: `vgraph()` accepts the clustering directly
+and `layout = "dendrogram"` reads the merge heights, leaving the marks to you.
+`layout = "unrooted"` (from `graphlayouts`) instead spreads an unrooted tree
+across the plane, the way phylogenies are usually shown.
