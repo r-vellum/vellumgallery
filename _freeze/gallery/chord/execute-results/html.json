@@ -1,0 +1,15 @@
+{
+  "hash": "dc1f091cd4716f7086ad2aa6309e67e1",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Chord diagram\"\ndescription: \"Directed flows between a handful of nodes, wrapped onto a circle with an out/in split and self-loops.\"\ncategories: [Flows]\n---\n\n\n\n`vchord()` wraps a weighted flow onto a circle: one arc per node, sized by the\nnode's total incident weight, and one ribbon per flow joining the source arc to\nthe target arc through the centre. It takes a `from`/`to`/`value` flow list or a\nsquare flow matrix (row = from, column = to).\n\nHere each cell is the number of customers who moved from one carrier to another\nover a year; the diagonal is those who stayed.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nswitch <- matrix(\n  c(\n    40, 12, 8, 5,\n    10, 55, 6, 9,\n    7, 8, 38, 11,\n    6, 10, 9, 44\n  ),\n  nrow = 4, byrow = TRUE,\n  dimnames = list(\n    c(\"Aircel\", \"Boost\", \"Cellcom\", \"Ditto\"),\n    c(\"Aircel\", \"Boost\", \"Cellcom\", \"Ditto\")\n  )\n)\np <- vchord(switch)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/chord-switch.png){width=100%}\n:::\n:::\n\n\nFlows are directed, so each node's arc is split into an outgoing block and an\nincoming block. `Aircel -> Boost` and `Boost -> Aircel` become separate ribbons,\nand each carrier's retained customers (`Aircel -> Aircel`) loop as a self-ribbon\nwithin its own sector. Ribbons take their source node's colour; pass\n`link_color = \"target\"` to colour by destination instead, and `sort = \"value\"`\nto order the sectors by weight.\n\n\n::: {.cell}\n\n```{.r .cell-code}\np <- vchord(switch, sort = \"value\", link_color = \"target\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/chord-target.png){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

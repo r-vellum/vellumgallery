@@ -1,0 +1,56 @@
+---
+title: "Chord diagram"
+description: "Directed flows between a handful of nodes, wrapped onto a circle with an out/in split and self-loops."
+categories: [Flows]
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+`vchord()` wraps a weighted flow onto a circle: one arc per node, sized by the
+node's total incident weight, and one ribbon per flow joining the source arc to
+the target arc through the centre. It takes a `from`/`to`/`value` flow list or a
+square flow matrix (row = from, column = to).
+
+Here each cell is the number of customers who moved from one carrier to another
+over a year; the diagonal is those who stayed.
+
+```{r}
+switch <- matrix(
+  c(
+    40, 12, 8, 5,
+    10, 55, 6, 9,
+    7, 8, 38, 11,
+    6, 10, 9, 44
+  ),
+  nrow = 4, byrow = TRUE,
+  dimnames = list(
+    c("Aircel", "Boost", "Cellcom", "Ditto"),
+    c("Aircel", "Boost", "Cellcom", "Ditto")
+  )
+)
+p <- vchord(switch)
+```
+
+```{r}
+#| echo: false
+vg(p, "chord-switch", dpi = 150)
+```
+
+Flows are directed, so each node's arc is split into an outgoing block and an
+incoming block. `Aircel -> Boost` and `Boost -> Aircel` become separate ribbons,
+and each carrier's retained customers (`Aircel -> Aircel`) loop as a self-ribbon
+within its own sector. Ribbons take their source node's colour; pass
+`link_color = "target"` to colour by destination instead, and `sort = "value"`
+to order the sectors by weight.
+
+```{r}
+p <- vchord(switch, sort = "value", link_color = "target")
+```
+
+```{r}
+#| echo: false
+vg(p, "chord-target", dpi = 150)
+```
