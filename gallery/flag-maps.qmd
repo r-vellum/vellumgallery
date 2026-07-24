@@ -1,0 +1,87 @@
+---
+title: "Flags poured into their borders"
+description: "clip_to() masks a plot to an sf geometry instead of the panel rectangle, so a country's flag fills the country's own outline."
+categories: [Spatial, Effects]
+image: figs/flag-brazil.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(sf)
+```
+
+A plot normally fills a rectangle. `clip_to()` swaps that rectangle for any
+shape: give it an `sf` geometry and every mark is masked to the outline. Here
+the mark underneath is a raster of a national flag, stretched across the
+country's bounding box, so the flag ends up wearing the country's own silhouette.
+
+The recipe reads a flag PNG with `magick`, turns its pixels into a grid of
+coloured cells, stretches that grid over the country's bounding box, and hands
+the outline to `clip_to()`. `scale_fill_identity()` tells `mark_raster()` to use
+the pixel colours verbatim rather than mapping them.
+
+```{r}
+countries <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+
+flag_map <- function(name, iso2, px = 200) {
+  poly <- st_transform(countries[countries$admin == name, ], 4326)
+  bb <- st_bbox(poly)
+
+  file <- tempfile(fileext = ".png")
+  download.file(sprintf("https://flagcdn.com/w640/%s.png", iso2),
+                file, quiet = TRUE, mode = "wb")
+  img <- magick::image_read(file)
+  img <- magick::image_flatten(magick::image_background(
+    magick::image_scale(img, as.character(px)), "white"))
+
+  cells <- magick::image_raster(img)
+  cells$color <- substr(cells$col, 1, 7)
+  cells$lon <- bb["xmin"] + (cells$x - min(cells$x)) /
+    diff(range(cells$x)) * (bb["xmax"] - bb["xmin"])
+  cells$lat <- bb["ymax"] - (cells$y - min(cells$y)) /
+    diff(range(cells$y)) * (bb["ymax"] - bb["ymin"])
+
+  vplot(cells) |>
+    mark_raster(x = lon, y = lat, fill = color) |>
+    scale_fill_identity() |>
+    clip_to(poly) |>
+    coord_sf() |>
+    theme_void() |>
+    labs(title = name)
+}
+```
+
+Brazil's borders are jagged enough to be unmistakable, and the flag's green
+edge keeps the silhouette crisp against the page.
+
+```{r}
+#| echo: false
+vg(flag_map("Brazil", "br"), "flag-brazil")
+```
+
+The same function works on any single-body country. Germany's three bands and
+Kenya's central shield come through with the flags stretched to fit.
+
+```{r}
+#| echo: false
+vg(flag_map("Germany", "de"), "flag-germany")
+```
+
+```{r}
+#| echo: false
+vg(flag_map("Kenya", "ke"), "flag-kenya")
+```
+
+Two things to watch. The flag is stretched to the bounding box, so a tall
+country squeezes a wide flag; that distortion is the price of filling the real
+outline. And a white stripe disappears against the page: Italy's or Japan's
+white would leave a gap where nothing marks the silhouette, so this reads best
+with flags that stay coloured edge to edge.
+
+`clip_to()` is the hard-edged member of a small family. `clip_to(poly, invert =
+TRUE)` punches the shape out as a hole instead of keeping it. `clip_layer()`
+masks only the most recent layer, so a raster field can sit inside the country
+while boundaries or city points drawn afterward stay full-bleed on top. And
+`set_mask()` fades the panel toward its edges with a soft radial vignette rather
+than a hard cut, and renders as a true feathered mask in PDF.
