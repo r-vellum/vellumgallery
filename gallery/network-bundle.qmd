@@ -1,6 +1,6 @@
 ---
 title: "Edge bundling"
-description: "Bundled edge routing collapses a dense node-link diagram into a few legible trunks."
+description: "Bundled edge routing collapses 2,682 US flight routes into a few legible trunks."
 categories: [Networks]
 ---
 
@@ -15,21 +15,22 @@ backbone shows through. It swaps in for `mark_edges()` and takes the same edge
 aesthetics; the geometry comes from the
 [edgebundle](https://github.com/schochastics/edgebundle) package.
 
-Here five clusters sit apart under a stress layout, and the edges running
-between them bundle into thick channels.
+The classic demonstration is `edgebundle::us_flights`: 276 US airports and 2,682
+routes between them. Laying the airports out at their real longitude/latitude
+draws the outline of the country; force bundling then pulls the routes into the
+transcontinental corridors.
 
 ```{r}
-set.seed(1)
-g <- igraph::sample_islands(5, 18, 0.4, 6)
-g <- igraph::set_vertex_attr(
-  g, "grp",
-  value = as.factor(igraph::cluster_louvain(g)$membership)
+g <- edgebundle::us_flights
+xy <- cbind(
+  igraph::V(g)$longitude,
+  igraph::V(g)$latitude
 )
 
-p <- vgraph(g, layout = "stress") |>
-  mark_edge_bundle(type = "hammer", color = "grey30") |>
-  mark_nodes(size = 2, fill = grp) |>
-  labs(title = "Bundled edges between clusters", fill = "cluster")
+p <- vgraph(g, layout = xy) |>
+  mark_edge_bundle(type = "force", color = "steelblue") |>
+  mark_nodes(size = 0.8, fill = "orange") |>
+  labs(title = "US domestic flight routes")
 ```
 
 ```{r}
@@ -37,7 +38,8 @@ p <- vgraph(g, layout = "stress") |>
 vg(p, "network-bundle")
 ```
 
-`type` picks the algorithm. `"force"` (the default) and `"path"` bend edges
-gently, `"stub"` only tufts each endpoint, and `"mingle"` merges hierarchically;
-`"divided"` splits a directed graph's trunks by direction. Bundled edges are
-faint by default so overlapping trunks read as density.
+`type` picks the algorithm. `"force"` (used here) and `"path"` bend edges toward
+their neighbours, `"stub"` only tufts each endpoint, and `"mingle"` merges
+hierarchically; `"divided"` splits a directed graph's trunks by direction. Pass
+algorithm-specific tuning through `params`. Bundled edges are faint by default,
+so overlapping trunks read as density.
