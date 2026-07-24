@@ -1,0 +1,15 @@
+{
+  "hash": "cfd43902b2b9c73fe20f965aa25adfb5",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Flow map\"\ndescription: \"A one-to-many flow map: migration into California fans out along merging branches sized by volume.\"\ncategories: [Networks]\n---\n\n\n\nA flow map shows one source reaching many destinations, the branches merging\ninto trunks whose width grows with the combined flow -- the idiom Minard used\nfor Napoleon's march and cartographers use for migration. `mark_flow_map()`\ntakes a one-to-many (star) graph laid out at fixed coordinates, the name of the\n`root`, and a per-edge `weight`; the geometry comes from the\n[edgebundle](https://github.com/schochastics/edgebundle) package.\n\n`edgebundle::cali2010` records migration into California from every other state\nin 2010. Placing each state at its geographic centre and rooting the flow at\nCalifornia draws the streams converging on the west coast, each trunk sized by\nhow many people moved along it.\n\n\n::: {.cell}\n\n```{.r .cell-code}\ng <- edgebundle::cali2010\nxy <- cbind(state.center$x, state.center$y)[\n  !state.name %in% c(\"Alaska\", \"Hawaii\"),\n]\n\np <- vgraph(g, layout = xy) |>\n  mark_flow_map(root = \"California\", weight = weight, width_range = c(0.3, 4)) |>\n  mark_nodes(size = 1, fill = \"grey30\") |>\n  labs(title = \"Migration into California, 2010\")\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/flow-map.png){width=100%}\n:::\n:::\n\n\n`type = \"spiral\"` (the default) is an angle-restricted spiral tree: planar,\ncrossing-free, and needing only the edgebundle package. `type = \"steiner\"`\nbuilds an approximate Steiner tree instead (it additionally needs the `interp`\npackage). The computed flow is mapped onto `width_range`, so the busiest trunk\nstays legible however lopsided the volumes are.\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
