@@ -29,7 +29,7 @@ xy <- cbind(
 
 p <- vgraph(g, layout = xy) |>
   mark_edge_bundle(type = "force", color = "steelblue") |>
-  mark_nodes(size = 0.8, fill = "orange") |>
+  mark_nodes(size = 0.2, fill = "orange") |>
   labs(title = "US domestic flight routes")
 ```
 
