@@ -1,0 +1,116 @@
+---
+title: "Word-sized charts, inline in the text"
+description: "vsparkline() draws an axis-free chart small enough to sit in a sentence. plot_svg() turns it into inline SVG that inherits the surrounding text colour."
+categories: [Text, Statistical]
+image: figs/sparkline-shapes.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+
+# Turn a sparkline into inline SVG that flows with the text: drop the XML
+# prolog, make the backgrounds transparent, and let the default ink follow the
+# paragraph's colour (currentColor) so it works in both the light and dark theme.
+spark_inline <- function(...) {
+  s <- plot_svg(vsparkline(...))
+  s <- sub("^<[?]xml[^>]*[?]>\\s*", "", s)
+  s <- gsub("fill=\"#ffffff\"", "fill=\"none\"", s)
+  s <- gsub("#4d4d4d", "currentColor", s)
+  sub("<svg ", "<svg style=\"vertical-align:-0.2em\" ", s)
+}
+
+idx <- function(name, n = 60) {
+  v <- as.numeric(datasets::EuStockMarkets[, name])
+  v[round(seq(1, length(v), length.out = n))]
+}
+dax  <- spark_inline(idx("DAX"), width = 24, height = 5)
+smi  <- spark_inline(idx("SMI"), width = 24, height = 5)
+cac  <- spark_inline(idx("CAC"), width = 24, height = 5)
+ftse <- spark_inline(idx("FTSE"), width = 24, height = 5)
+```
+
+Edward Tufte called a sparkline a "dataword": a chart small enough to sit in a
+line of prose, read at a glance, and then move past. Its point is context. A
+number in a sentence tells you where a series ended; a sparkline next to it shows
+you the whole path that got there, without breaking your reading to look at a
+figure somewhere else on the page.
+
+`vsparkline()` draws one. It takes a numeric vector, no axes, and a size in
+millimetres, and returns an ordinary plot. `plot_svg()` renders any vellumplot
+object to a self-contained SVG string, so a sparkline can go straight into the
+running text. Over 1991 to 1998 the German DAX `r dax` and Swiss SMI `r smi`
+more than tripled, while the French CAC `r cac` and British FTSE `r ftse` roughly
+doubled; all four fell sharply in the last months of the series. Each of those is
+a live SVG, sized to the line and coloured to match the paragraph.
+
+The trick that makes it sit in the text is a short helper: strip the XML header,
+set the background fills to `none`, and swap the default grey ink for
+`currentColor`, so the mark takes the colour of whatever text surrounds it. That
+last step is what keeps it legible when the reader flips this site to dark mode.
+
+```{r}
+#| eval: false
+spark_inline <- function(...) {
+  s <- plot_svg(vsparkline(...))
+  s <- sub("^<[?]xml[^>]*[?]>\\s*", "", s)           # drop the XML prolog
+  s <- gsub("fill=\"#ffffff\"", "fill=\"none\"", s)  # transparent background
+  s <- gsub("#4d4d4d", "currentColor", s)            # ink follows text colour
+  sub("<svg ", "<svg style=\"vertical-align:-0.2em\" ", s)
+}
+```
+
+Then drop the result into the prose with an inline R expression. Pandoc treats
+the returned `<svg>` as raw HTML and passes it straight through, so the chart
+lands mid-sentence with no figure environment around it.
+
+## Three shapes
+
+`vsparkline()` draws three kinds of series. `"line"` traces a trend and marks
+the extremes with a dot; `"bar"` is a column micro-chart for counts or volumes;
+`"winloss"` reduces a series to equal up and down bars about a baseline, for
+streaks of binary outcomes. The figure stacks all three, built from a stock
+index, its monthly trading volume, and its daily up-or-down days.
+
+```{r}
+i <- as.numeric(datasets::EuStockMarkets[, "DAX"])
+line    <- vsparkline(i[round(seq(1, length(i), length.out = 60))], width = 55, height = 12)
+bars    <- vsparkline(rpois(28, 6), type = "bar", width = 55, height = 12)
+winloss <- vsparkline(sign(diff(i))[1:60], type = "winloss", width = 55, height = 12)
+
+p <- concat(line, bars, winloss, design = "A\nB\nC")
+```
+
+```{r}
+#| echo: false
+vg(p, "sparkline-shapes")
+```
+
+## A trend callout inside a plot
+
+`annotate("sparkline", ...)` drops a sparkline at a data coordinate, so a chart
+can carry a small trend note right where it belongs. The monthly airline
+passenger counts below swing wider every year, and the noise makes the trend
+hard to read off the points. A sparkline of the yearly totals, floated into the
+empty corner, states the trend the detail obscures: steady growth, no wobble.
+
+```{r}
+ap <- datasets::AirPassengers
+monthly <- data.frame(year = as.numeric(time(ap)), pax = as.numeric(ap))
+yearly  <- as.numeric(tapply(ap, floor(time(ap)), sum))
+
+p <- vplot(monthly) |>
+  mark_line(x = year, y = pax, color = "grey55") |>
+  mark_point(x = year, y = pax, size = 0.8) |>
+  annotate("sparkline", x = 1951, y = 580, values = yearly,
+           width = 34, height = 11, halign = "left") |>
+  labs(title = "Air passengers, 1949 to 1960", x = "year", y = "monthly (thousands)")
+```
+
+```{r}
+#| echo: false
+vg(p, "sparkline-callout")
+```
+
+For sparklines that live in a table rather than a sentence, see
+[sparklines in a table](sparkline-tables.qmd).
