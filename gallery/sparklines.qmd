@@ -9,25 +9,26 @@ image: figs/sparkline-shapes.png
 #| include: false
 source("_helper.R")
 
-# Turn a sparkline into inline SVG that flows with the text: drop the XML
-# prolog, make the backgrounds transparent, and let the default ink follow the
-# paragraph's colour (currentColor) so it works in both the light and dark theme.
-spark_inline <- function(...) {
-  s <- plot_svg(vsparkline(...))
-  s <- sub("^<[?]xml[^>]*[?]>\\s*", "", s)
-  s <- gsub("fill=\"#ffffff\"", "fill=\"none\"", s)
-  s <- gsub("#4d4d4d", "currentColor", s)
-  sub("<svg ", "<svg style=\"vertical-align:-0.2em\" ", s)
-}
-
+# Pull a EuStockMarkets column down to a sparkline-sized series.
 idx <- function(name, n = 60) {
   v <- as.numeric(datasets::EuStockMarkets[, name])
   v[round(seq(1, length(v), length.out = n))]
 }
-dax  <- spark_inline(idx("DAX"), width = 24, height = 5)
-smi  <- spark_inline(idx("SMI"), width = 24, height = 5)
-cac  <- spark_inline(idx("CAC"), width = 24, height = 5)
-ftse <- spark_inline(idx("FTSE"), width = 24, height = 5)
+
+# plot_svg(inline = TRUE) returns a prolog-free <svg> fragment on a transparent
+# background; recolor maps the grey30 ink to currentColor so it follows the text.
+spark <- function(values, ...) {
+  plot_svg(vsparkline(values, ...),
+           inline = TRUE, recolor = c(grey30 = "currentColor"))
+}
+dax  <- spark(idx("DAX"),  width = 24, height = 5)
+smi  <- spark(idx("SMI"),  width = 24, height = 5)
+cac  <- spark(idx("CAC"),  width = 24, height = 5)
+ftse <- spark(idx("FTSE"), width = 24, height = 5)
+```
+
+```{=html}
+<style>p svg { vertical-align: -0.2em; }</style>
 ```
 
 Edward Tufte called a sparkline a "dataword": a chart small enough to sit in a
@@ -36,33 +37,32 @@ number in a sentence tells you where a series ended; a sparkline next to it show
 you the whole path that got there, without breaking your reading to look at a
 figure somewhere else on the page.
 
-`vsparkline()` draws one. It takes a numeric vector, no axes, and a size in
-millimetres, and returns an ordinary plot. `plot_svg()` renders any vellumplot
-object to a self-contained SVG string, so a sparkline can go straight into the
-running text. Over 1991 to 1998 the German DAX `r dax` and Swiss SMI `r smi`
-more than tripled, while the French CAC `r cac` and British FTSE `r ftse` roughly
-doubled; all four fell sharply in the last months of the series. Each of those is
-a live SVG, sized to the line and coloured to match the paragraph.
+`vsparkline()` draws one: a numeric vector in, an axis-free plot out, sized in
+millimetres. `plot_svg(inline = TRUE)` turns that plot into an SVG made to drop
+into a page rather than saved as a file. Over 1991 to 1998 the German DAX
+`r dax` and Swiss SMI `r smi` more than tripled, while the French CAC `r cac` and
+British FTSE `r ftse` roughly doubled; all four fell sharply in the last months
+of the series. Each is a live SVG, sized to the line and coloured to match the
+paragraph.
 
-The trick that makes it sit in the text is a short helper: strip the XML header,
-set the background fills to `none`, and swap the default grey ink for
-`currentColor`, so the mark takes the colour of whatever text surrounds it. That
-last step is what keeps it legible when the reader flips this site to dark mode.
+Two arguments make it fit the text. `inline = TRUE` drops the `<?xml?>` prolog so
+the `<svg>` is a valid fragment mid-paragraph, and a sparkline already renders on
+a transparent background, so it sits on the page instead of in a white box.
+`recolor` rewrites a source colour to whatever token you give it: mapping the
+default `grey30` ink to the CSS keyword `currentColor` makes the browser paint
+the line in the current text colour, so it stays legible when the reader flips
+this site to dark mode.
 
 ```{r}
 #| eval: false
-spark_inline <- function(...) {
-  s <- plot_svg(vsparkline(...))
-  s <- sub("^<[?]xml[^>]*[?]>\\s*", "", s)           # drop the XML prolog
-  s <- gsub("fill=\"#ffffff\"", "fill=\"none\"", s)  # transparent background
-  s <- gsub("#4d4d4d", "currentColor", s)            # ink follows text colour
-  sub("<svg ", "<svg style=\"vertical-align:-0.2em\" ", s)
-}
+plot_svg(vsparkline(idx("DAX")),
+         inline = TRUE, recolor = c(grey30 = "currentColor"))
 ```
 
-Then drop the result into the prose with an inline R expression. Pandoc treats
-the returned `<svg>` as raw HTML and passes it straight through, so the chart
-lands mid-sentence with no figure environment around it.
+Drop the result into the prose with an inline R expression; pandoc passes the
+`<svg>` through as raw HTML, so the chart lands mid-sentence with no figure
+around it. One line of CSS, `p svg { vertical-align: -0.2em }`, nudges it onto
+the text baseline.
 
 ## Three shapes
 
