@@ -14,11 +14,14 @@ vg <- function(p, name, dpi = 150) {
   knitr::include_graphics(f)
 }
 
-# The animation counterpart of vg(): tween and encode a vellum_animation to a
-# looping GIF, then embed it.
-vg_anim <- function(a, name) {
+# The animation counterpart of vg(): tween and encode a vellum_animation, then
+# embed it. Defaults to an animated PNG (APNG) rather than GIF -- a plot's
+# antialiased edges and smooth panel need more than GIF's 256 colours per frame,
+# so APNG (full-colour, lossless) is much cleaner. Pass ext = "gif" for the
+# smaller, universally-embeddable version.
+vg_anim <- function(a, name, ext = "png") {
   dir.create("figs", showWarnings = FALSE)
-  f <- file.path("figs", paste0(name, ".gif"))
+  f <- file.path("figs", paste0(name, ".", ext))
   anim_save(f, a)
   knitr::include_graphics(f)
 }

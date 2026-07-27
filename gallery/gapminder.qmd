@@ -2,7 +2,7 @@
 title: "Animated bubble chart (gapminder)"
 description: "Keyframe animation: a Gapminder bubble chart flowing over year, with scales frozen once across all years and frames tweened in the Rust backend."
 categories: [Animation]
-image: figs/gapminder.gif
+image: figs/gapminder.png
 ---
 
 ```{r}
@@ -19,8 +19,11 @@ nothing retrains).
 `transition_time()` is the right idiom for a continuous time like `year`: it
 allocates frames in proportion to the gaps between years and never pauses or
 wraps, so the bubbles glide at a constant rate. `animate()` compiles the
-keyframes and `anim_save()` tweens, renders (in parallel), and encodes the GIF —
-all in one pass on the Rust backend.
+keyframes and `anim_save()` tweens, renders (in parallel), and encodes the frames
+— all in one pass on the Rust backend. The extension chooses the format: `.png`
+here for a full-colour, lossless animated PNG (a plot's antialiased edges need
+more than GIF's 256 colours per frame), or `.gif` for the smaller, universally
+embeddable version.
 
 ```{r}
 library(gapminder)
