@@ -11,10 +11,12 @@ suppressMessages(library(vellum))
 dir.create("figs", showWarnings = FALSE)
 ```
 
-A **vellum** scene is not a stream of drawing commands that runs once and is
-gone. It is a retained graph: every grob and viewport stays addressable after
-you draw it. Give a node a `name` and you can find it again, read its
-properties, and rewrite them, leaving the rest of the scene untouched.
+A **vellum** scene is a retained graph: every grob and viewport stays addressable
+after you draw it. Give a node a `name` and you can find it again, read its
+properties, and rewrite them, leaving the rest of the scene untouched. `grid` can
+do this too, with `grid.ls()`, `getGrob()` and `editGrob()`; here the tree is a
+value rather than device state, and the same addressability is what `hit_test()`
+and `scene_model()` read geometry back through.
 
 Here is a plain bar chart built from named `rect_grob`s. Each bar carries a
 `name` (`bar1`, `bar2`, ...) alongside its geometry and fill.

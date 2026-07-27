@@ -27,8 +27,8 @@ one scene renders to PNG, SVG, or PDF with the same geometry and text shaping.
 
 A vellumplot plot is a serializable spec, not a picture. Nothing is drawn until
 it compiles: encodings resolve, scales train, the panel layout is measured, and
-guides and marks become vellum grobs. The scene it produces is retained rather
-than drawn immediate-mode, so every element keeps a data key and a bounding box.
+guides and marks become vellum grobs. The scene it produces reports itself back:
+every element keeps a data key and a resolved device-pixel bounding box.
 That is what vellumwidget reads to wire up interactivity in the browser.
 
 The paint model covers gradients, tiling patterns, alpha and luminance masks,
