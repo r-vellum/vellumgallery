@@ -72,6 +72,7 @@ the extremes with a dot; `"bar"` is a column micro-chart for counts or volumes;
 streaks of binary outcomes. The figure stacks all three, built from a stock
 index, its monthly trading volume, and its daily up-or-down days.
 
+
 ```{r}
 i <- as.numeric(datasets::EuStockMarkets[, "DAX"])
 line    <- vsparkline(i[round(seq(1, length(i), length.out = 60))], width = 55, height = 12)
