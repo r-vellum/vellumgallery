@@ -1,0 +1,15 @@
+{
+  "hash": "94f567f55d16f4ea5098c037689a5903",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Animated bubble chart (gapminder)\"\ndescription: \"Keyframe animation: a Gapminder bubble chart flowing over year, with scales frozen once across all years and frames tweened in the Rust backend.\"\ncategories: [Animation]\nimage: figs/gapminder.gif\n---\n\n\n\nvellumplot animates a plot by compiling one **keyframe** per state and tweening\nthe frames between them. The scales are trained **once over every state and\nfrozen**, so the axes, the colour ramp and the size legend stay put while the\ndata moves — the animation is non-reactive (the states are fixed up front,\nnothing retrains).\n\n`transition_time()` is the right idiom for a continuous time like `year`: it\nallocates frames in proportion to the gaps between years and never pauses or\nwraps, so the bubbles glide at a constant rate. `animate()` compiles the\nkeyframes and `anim_save()` tweens, renders (in parallel), and encodes the GIF —\nall in one pass on the Rust backend.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nlibrary(gapminder)\n\na <- vplot(gapminder) |>\n  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent) |>\n  scale_x_continuous(trans = \"log10\") |>\n  labs(title = \"Gapminder\", x = \"GDP per capita\", y = \"Life expectancy\") |>\n  transition_time(year) |>\n  animate(nframes = 150, fps = 25)\n```\n:::\n\n\nEach bubble's position and size interpolate frame to frame; colours interpolate\nperceptually in Oklab. Because the x, y and size scales were frozen over the union\nof all years, a country that is poor early and rich late keeps one stable frame of\nreference throughout.\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/gapminder.gif){width=100%}\n:::\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

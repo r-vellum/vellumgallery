@@ -13,3 +13,12 @@ vg <- function(p, name, dpi = 150) {
   render_plot(p, f, dpi = dpi)
   knitr::include_graphics(f)
 }
+
+# The animation counterpart of vg(): tween and encode a vellum_animation to a
+# looping GIF, then embed it.
+vg_anim <- function(a, name) {
+  dir.create("figs", showWarnings = FALSE)
+  f <- file.path("figs", paste0(name, ".gif"))
+  anim_save(f, a)
+  knitr::include_graphics(f)
+}
