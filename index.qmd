@@ -14,11 +14,10 @@ page-layout: full
 The parchment, the pen, and the annotation revealed on the page.
 ::::
 
-A showcase of what you can draw with the **vellum** graphics ecosystem in R.
-Its engine measures text and solves layout before anything reaches a canvas,
-so a figure is a thing you can interrogate, lint, hash, and hand to a browser
-— not just pixels. The grammar sits on top; the widget reads the same solved
-scene.
+A showcase of what you can draw with the **vellum** graphics ecosystem in R. Its
+engine measures text and solves layout before anything reaches a canvas, so a figure
+is something you can interrogate, lint, hash, and hand to a browser rather than a
+sheet of pixels. The grammar sits on top; the widget reads the same solved scene.
 
 [Browse the gallery](gallery/index.qmd){.btn .btn-primary .btn-lg}
 ::::
@@ -34,9 +33,9 @@ scene.
 
 [the parchment]{.role}
 
-A low-level graphics framework in the spirit of grid. Text is measured and
-layout solved with no device open, so the scene can say where every element
-landed before it is drawn.
+A low-level graphics framework in the spirit of grid. Text is measured and layout
+solved with no device open, so the scene can say where every element landed before
+it is drawn.
 :::
 
 :::{.eco-card}
@@ -57,7 +56,7 @@ serializable spec until it compiles into a vellum scene.
 
 [the annotation]{.role}
 
-Hosts a vellum scene in the browser — hover, select, brush, zoom — reading the
+Hosts a vellum scene in the browser (hover, select, brush, zoom) by reading the
 solved geometry instead of re-drawing the plot in a second engine.
 :::
 
@@ -68,8 +67,7 @@ solved geometry instead of re-drawing the plot in a second engine.
 
 [the meta-package]{.role}
 
-Installs and loads the whole ecosystem together, in the spirit of the
-tidyverse.
+Installs and loads the whole ecosystem together, in the spirit of the tidyverse.
 :::
 
 ::::

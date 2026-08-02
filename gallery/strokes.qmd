@@ -1,6 +1,6 @@
 ---
 title: "What a stroke can be"
-description: "Gradient strokes, a width and colour per segment, dash phase, an outline you can fill, pixel-snapped hairlines, and haloed text — the paint model applied to lines rather than to fills."
+description: "Gradient strokes, a width and colour per segment, dash phase, an outline you can fill, pixel-snapped hairlines, and haloed text: the paint model applied to lines rather than to fills."
 categories: [Backend]
 image: figs/strokes.png
 ---
@@ -17,8 +17,8 @@ vs <- function(scene, name, dpi = 150) {
 ```
 
 The [paint model](paint-model.qmd) page is about fills: gradients, patterns, masks,
-blend modes, all applied to the region a shape encloses. This one is about the
-other half, which usually gets far less: the region a *line* covers.
+blend modes, all applied to the region a shape encloses. This page is about the
+region a *line* covers, which usually gets a colour and a width and nothing else.
 
 ```{r}
 warm <- linear_gradient(c("#c1121f", "#e08c3a", "#c9a874"))
@@ -42,15 +42,15 @@ vs(scene, "strokes")
 ```
 
 `vl_gpar(col = linear_gradient(...))` strokes *with* a gradient. A trajectory can
-carry its colour along itself, and it applies to any stroked path — the circle's
+carry its colour along itself, and it applies to any stroked path: the circle's
 outline below is the same paint as the two waves. This is normally faked by emitting
 a few hundred one-segment lines in slightly different flat colours; here it is one
 grob and real paint on every backend (a shader in raster, `stroke="url(#…)"` in SVG,
 a shading in PDF).
 
 Text and markers fall back to the gradient's first stop, because a glyph run has no
-path to run a ramp along. A *pattern* in `col` falls back to a flat colour, because a
-pattern needs cell geometry that a stroke does not have.
+path to run a ramp along. A *pattern* in `col` falls back to a flat colour, because
+a pattern needs cell geometry that a stroke does not have.
 
 ## A width and a colour per segment
 
@@ -100,12 +100,12 @@ vs(dashes, "strokes-dash-phase")
 
 ## An outline you can fill
 
-`stroke_to_path()` converts the stroke of a line-like grob into the closed region
-it covers — what you would get by tracing round the drawn line. A one-dimensional
-path with a colour becomes an area with an interior, which is what you need to fill
-a line with a gradient or a pattern, or to hand it to a cutting plotter that wants a
-shape rather than a centreline. It uses the same stroker the rasterizer does, so the
-outline is exactly the ink that would have landed.
+`stroke_to_path()` converts the stroke of a line-like grob into the closed region it
+covers, the shape you would get by tracing round the drawn line. A one-dimensional
+path with a colour becomes an area with an interior, so it can be filled with a
+gradient or a pattern, or handed to a cutting plotter that wants a shape rather than
+a centreline. It uses the same stroker the rasterizer does, so the outline is
+exactly the ink that would have landed.
 
 ```{r}
 curve <- lines_grob(0.05 + 0.9 * t, 0.5 + 0.3 * sin(3 * pi * t),
@@ -124,25 +124,26 @@ vs(filled, "strokes-outline")
 ```
 
 The result is baked at one size, and necessarily so: a stroke width is a device
-quantity, so its outline only exists once a page size and resolution are chosen —
-which is why they are arguments. An outline is a shape, not a stroke, and it will
-not rescale with the page the way the original would.
+quantity, so its outline only exists once a page size and resolution are chosen, and
+those are arguments here for that reason. An outline is a shape rather than a
+stroke, so it will not rescale with the page the way the original would.
 
 ## Hairlines and halos
 
 Two smaller things that decide whether a figure looks sharp or muddy.
 
 `vl_gpar(crisp = TRUE)` snaps axis-parallel strokes onto the pixel grid. A 1-px rule
-at a fractional coordinate straddles two rows and renders as two grey ones, which is
-why gridlines so often look soft; snapping puts it back on one. Diagonals are left
-alone. `vl_gpar(antialias = FALSE)` goes further and gives hard pixel edges, for
-pixel art, QR codes, and heatmap cells that must tile without a seam.
+at a fractional coordinate straddles two rows and renders as two grey ones, and that
+is why gridlines so often look soft. Snapping puts the rule back on one row;
+diagonals are left alone. `vl_gpar(antialias = FALSE)` goes further and gives hard
+pixel edges, for pixel art, QR codes, and heatmap cells that must tile without a
+seam.
 
-`vl_gpar(halo_col = , halo_width = )` strokes the glyph outlines *under* the fill, so
-a label stays legible over a dense scatter or map imagery. Because vellum holds the
-outlines this is one real stroke, not the eight offset copies a grid-layered package
-has to draw, and it works on all three backends — in native SVG via `paint-order`,
-so the text stays selectable.
+`vl_gpar(halo_col = , halo_width = )` strokes the glyph outlines *under* the fill,
+so a label stays legible over a dense scatter or map imagery. Because vellum holds
+the outlines this is one real stroke rather than the eight offset copies a
+grid-layered package has to draw, and it works on all three backends. Native SVG
+uses `paint-order`, so the text stays selectable.
 
 ```{r}
 set.seed(7)

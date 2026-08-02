@@ -1,6 +1,6 @@
 ---
 title: "Contours traced in the engine"
-description: "mark_contour() and mark_contour_filled() trace iso-lines with vellum's own marching squares, so contour lines are chained polylines and filled bands are closed rings — no extra package involved."
+description: "mark_contour() and mark_contour_filled() trace iso-lines with vellum's own marching squares, so contour lines are chained polylines and filled bands are closed rings, with no extra package involved."
 categories: [Statistical, Heatmaps]
 image: figs/contours-filled.png
 ---
@@ -10,14 +10,14 @@ image: figs/contours-filled.png
 source("_helper.R")
 ```
 
-A contour plot needs somebody to walk a grid of values and chain the crossings
-into curves. vellum does that itself (`vellum::vl_contour()`, marching squares),
-so `mark_contour()` needs no tracing package: each contour comes back as one
-chained polyline, with closed loops actually closed, rather than a heap of
-disconnected line segments that happen to line up.
+A contour plot needs somebody to walk a grid of values and chain the crossings into
+curves. vellum does that itself (`vellum::vl_contour()`, marching squares), so
+`mark_contour()` needs no tracing package: each contour comes back as one chained
+polyline, with closed loops actually closed, rather than a heap of disconnected line
+segments that happen to line up.
 
-The classic two-cluster density: Old Faithful's eruption lengths against the
-wait before them.
+The classic two-cluster density: Old Faithful's eruption lengths against the wait
+before them.
 
 ```{r}
 p <- vplot(faithful, width = 7, height = 4.6) |>
@@ -34,19 +34,19 @@ p <- vplot(faithful, width = 7, height = 4.6) |>
 vg(p, "contours-lines")
 ```
 
-Levels are coloured for you: `mark_contour()` maps `color = after_stat(level)`,
-so the legend reads as density without you asking for it.
+Levels are coloured for you: `mark_contour()` maps `color = after_stat(level)`, so
+the legend reads as density without you asking for it.
 
 ## Filled bands
 
-`mark_contour_filled()` paints the bands between the levels instead. Each band is
-a closed ring, painted in level order, which is what produces the layered look —
-and because the rings are real paths rather than a rasterised heatmap, they stay
+`mark_contour_filled()` paints the bands between the levels instead. Each band is a
+closed ring, painted in level order, and that ordering is what produces the layered
+look. Because the rings are real paths rather than a rasterised heatmap, they stay
 crisp in SVG and PDF.
 
 A band whose contour runs off the edge of the estimation grid is closed along the
-grid boundary rather than chorded shut, so the outermost level fills the corners
-it should instead of slicing wedges across the panel.
+grid boundary rather than chorded shut, so the outermost level fills the corners it
+should instead of slicing wedges across the panel.
 
 ```{r}
 p2 <- vplot(faithful, width = 7, height = 4.6) |>
@@ -62,12 +62,12 @@ p2 <- vplot(faithful, width = 7, height = 4.6) |>
 vg(p2, "contours-filled")
 ```
 
-## Any surface, not only a density
+## Contouring a surface you supply
 
-By default the field is a kernel density estimate of the `x`/`y` cloud (the one
-part that still needs `MASS`). Map a `z` aesthetic instead and the mark contours
-*your* surface over a regular grid — a fitted response, a simulated field, anything
-you can write as a function of two variables.
+By default the field is a kernel density estimate of the `x`/`y` cloud (the one part
+that still needs `MASS`). Map a `z` aesthetic instead and the mark contours *your*
+surface over a regular grid: a fitted response, a simulated field, anything you can
+write as a function of two variables.
 
 ```{r}
 grid <- expand.grid(x = seq(-3, 3, length.out = 80), y = seq(-3, 3, length.out = 80))
@@ -83,7 +83,7 @@ p3 <- vplot(grid, width = 7, height = 4.6) |>
 vg(p3, "contours-surface")
 ```
 
-Note the grid convention: like `image()`, `contour()`, and `outer()`, rows index
-`x` and columns index `y`. Pair the lines with
+Note the grid convention: like `image()`, `contour()`, and `outer()`, rows index `x`
+and columns index `y`. Pair the lines with
 [`mark_text_path()`](text-path.qmd) to label a level directly on its own curve
 instead of through a legend.

@@ -10,12 +10,11 @@ image: figs/pattern-stack.png
 source("_helper.R")
 ```
 
-Colour is the usual way to separate categories in a bar chart, and it is the
-first thing to fail: photocopied to greyscale, or read by someone with
-colour-vision deficiency, the categories collapse into indistinguishable greys.
-A texture survives both. vellumplot fills any shape with a repeating pattern
-through the `pattern_*()` family, so a filled mark can carry a distinction that
-does not depend on hue.
+Colour is the usual way to separate categories in a bar chart, and it is the first
+thing to fail: photocopied to greyscale, or read by someone with colour-vision
+deficiency, the categories collapse into indistinguishable greys. A texture survives
+both. vellumplot fills any shape with a repeating pattern through the `pattern_*()`
+family, so a filled mark can carry a distinction that does not depend on hue.
 
 Map the `pattern` aesthetic to a variable and add `scale_pattern()`; each level
 picks up a different texture and the legend shows it. The data is
@@ -46,11 +45,10 @@ reader who cannot separate red from green, and the five bands stay apart.
 
 ## The builders
 
-Five constructors cover the common textures. Each takes a line `color`, a
-background `bg`, and a `spacing` in millimetres; `pattern_stripe()` also takes an
-`angle` (one of 0, 45, 90, 135) and `pattern_dot()` and `pattern_checker()` take
-a `size`. Pass a list of them to `scale_pattern(values = )` to control which
-texture each level gets.
+Five constructors cover the common textures. Each takes a line `color`, a background
+`bg`, and a `spacing` in millimetres; `pattern_stripe()` also takes an `angle` (one
+of 0, 45, 90, 135) and `pattern_dot()` and `pattern_checker()` take a `size`. Pass a
+list of them to `scale_pattern(values = )` to control which texture each level gets.
 
 ```{r}
 builders <- data.frame(
@@ -78,19 +76,19 @@ p <- vplot(builders) |>
 vg(p, "pattern-builders")
 ```
 
-To hatch a single shape without a legend, write the builder straight into
-`fill` (`mark_bar(fill = pattern_crosshatch())`). The `pattern` aesthetic works
-the same way on areas, tiles, boxplots, violins, ridgelines, and `sf` polygons,
-so a greyscale-safe legend is one line away on any filled mark.
+To hatch a single shape without a legend, write the builder straight into `fill`
+(`mark_bar(fill = pattern_crosshatch())`). The `pattern` aesthetic works the same
+way on areas, tiles, boxplots, violins, ridgelines, and `sf` polygons, so a
+greyscale-safe legend is one line away on any filled mark.
 
 ## The vector one
 
 Those five are tiles: a small image repeated across the shape. `pattern_hatch()` is
-their vector counterpart — evenly spaced parallel lines produced as real geometry
-(`vellum::vl_hatch()`) instead of a rasterised tile. Two things follow. It stays
-crisp at any magnification and embeds no image in a PDF, which makes it the better
-choice for print. And it is not bound by seamless tiling, so `angle` can be
-*anything* rather than one of 0, 45, 90, 135.
+their vector counterpart, evenly spaced parallel lines produced as real geometry
+(`vellum::vl_hatch()`) instead of a rasterised tile. Two things follow. It stays crisp
+at any magnification and embeds no image in a PDF, which makes it the better choice
+for print. And it is not bound by seamless tiling, so `angle` can be *anything*
+rather than one of 0, 45, 90, 135.
 
 ```{r}
 angles <- data.frame(
@@ -118,7 +116,8 @@ vg(p, "pattern-hatch-angles")
 ```
 
 It takes the same `color`, `bg`, `spacing`, and `linewidth` arguments as the tile
-builders, and is used the same two ways — as a constant `fill`, or as a
+builders, and is used the same two ways: as a constant `fill`, or as a
 `scale_pattern(values = )` entry. It is the "fix it" step of the accessibility
-workflow: [`plot_lint()` flags a problem and `render_plot(cvd = )` shows it](plot-lint.qmd),
-and a redundant non-colour encoding is what actually solves it.
+workflow, where
+[`plot_lint()` flags a problem and `render_plot(cvd = )` shows it](plot-lint.qmd);
+a redundant non-colour encoding is what solves it.

@@ -9,14 +9,14 @@ categories: [Effects]
 source("_helper.R")
 ```
 
-Layer effects and gradient fills are first-class. A `linear_gradient()` fades
-the area to transparent, `glow()` haloes the line, and `theme_cyberpunk()` sets
-the near-black canvas and neon palette.
+Layer effects and gradient fills are first-class. A `linear_gradient()` fades the
+area to transparent, `glow()` haloes the line, and `theme_cyberpunk()` sets the
+near-black canvas and neon palette.
 
-The halo is a real Gaussian blur in the engine (`vellum::vl_viewport(blur = )`):
-one softened layer composited under the line, rather than a stack of widened
-low-opacity copies faking a soft edge. It is cheaper and smoother, and it lifts the
-restriction that came with the old approach — glowing text.
+The halo is a real Gaussian blur in the engine (`vellum::vl_viewport(blur = )`): one
+softened layer composited under the line, rather than a stack of widened low-opacity
+copies faking a soft edge. It is cheaper and smoother, and it lifts the restriction
+that came with the old approach, so text can glow too.
 
 ```{r}
 set.seed(1)
@@ -41,8 +41,8 @@ vg(p, "cyberpunk")
 ## Text glows too
 
 `mark_text()` and `mark_label()` take an `effects` argument, and `glow()` and
-`shadow()` work on them — an annotation can sit in the same neon register as the
-line it is annotating instead of being the one flat element on a glowing canvas.
+`shadow()` work on them, so an annotation can sit in the same neon register as the
+line it labels instead of being the one flat element on a glowing canvas.
 
 ```{r}
 peak <- area[which.max(area$y), ]

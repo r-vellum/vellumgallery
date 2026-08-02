@@ -1,6 +1,6 @@
 ---
 title: "Icons as vector markers"
-description: "A point shape can be an SVG icon — a path d string or a .svg file — drawn as crisp vector geometry rather than a raster pasted at every point."
+description: "A point shape can be an SVG icon, a path d string or a .svg file, drawn as crisp vector geometry rather than a raster pasted at every point."
 categories: [Basics, Images]
 image: figs/svg-markers-mapped.png
 ---
@@ -10,10 +10,10 @@ image: figs/svg-markers-mapped.png
 source("_helper.R")
 ```
 
-Using icons as plotting symbols in R has usually meant rasterising: one small
-PNG stamped at every data point, soft at any zoom and useless in print. But an
-icon set already ships the thing you actually want — a path `d` string. vellum
-can draw that path directly (`vellum::svg_grob()`), so `shape` accepts one.
+Using icons as plotting symbols in R has usually meant rasterising: one small PNG
+stamped at every data point, soft at any zoom and useless in print. But an icon set
+already ships the thing you want, a path `d` string, and vellum can draw that path
+directly (`vellum::svg_grob()`), so `shape` accepts one.
 
 Pass a literal `d` string for a constant marker:
 
@@ -28,8 +28,8 @@ p <- vplot(mtcars, width = 7, height = 4.4) |>
   labs(title = "One icon, every point", x = "weight (1000 lbs)", y = "mpg")
 ```
 
-`shape` is a tidy-eval channel like any other, so a bare `plane` would be looked
-up as a column of the data. Inline the string, or inject the variable with `!!` as
+`shape` is a tidy-eval channel like any other, so a bare `plane` would be looked up
+as a column of the data. Inline the string, or inject the variable with `!!` as
 above. `size` is in millimetres, as it is for the built-in glyphs.
 
 ```{r}
@@ -40,8 +40,8 @@ vg(p, "svg-markers-constant")
 ## One icon per level
 
 Map `shape` to a discrete variable and give `scale_shape(values = )` one icon per
-level. The legend draws the icons themselves, and the `size` aesthetic scales
-them like any other marker.
+level. The legend draws the icons themselves, and the `size` aesthetic scales them
+like any other marker.
 
 ```{r}
 star <- "M12 2l3 7h7l-5.5 4.5 2 7-6.5-4.5-6.5 4.5 2-7L2 9h7z"
@@ -67,15 +67,14 @@ p2 <- vplot(cars, width = 7, height = 4.4) |>
 vg(p2, "svg-markers-mapped")
 ```
 
-A `values` entry may also be a path to a `.svg` file, which is the practical
-route when the icons come from a downloaded set rather than pasted inline.
-Built-in glyph names (`"circle"`, `"square"`, `"triangle"`, `"diamond"`, `"plus"`,
-`"cross"`, `"triangle_down"`, `"star"`) still work, and can be mixed with SVG
-values in the same scale.
+A `values` entry may also be a path to a `.svg` file, which is the practical route
+when the icons come from a downloaded set rather than pasted inline. Built-in glyph
+names (`"circle"`, `"square"`, `"triangle"`, `"diamond"`, `"plus"`, `"cross"`,
+`"triangle_down"`, `"star"`) still work, and can be mixed with SVG values in the
+same scale.
 
-Because the marker is geometry, it survives everything geometry survives: zoom
-into the SVG and the edges stay sharp, and the PDF carries paths rather than an
-embedded bitmap per point. One gap to know about: per-icon interactivity is not
-wired up yet, so `data_id` on an SVG-marker layer does not give you a hoverable
-icon — the icons render on every backend, they just are not yet pickable in a
-widget.
+Because the marker is geometry, it survives everything geometry survives: zoom into
+the SVG and the edges stay sharp, and the PDF carries paths rather than an embedded
+bitmap per point. One gap to know about: per-icon interactivity is not wired up yet,
+so `data_id` on an SVG-marker layer does not give you a hoverable icon. The icons
+render on every backend; they are not yet pickable in a widget.

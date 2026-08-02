@@ -12,18 +12,18 @@ suppressMessages(library(sf))
 nc <- st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
 ```
 
-A map without a scale bar does not tell you how big anything is, and a projected
-map without a graticule does not tell you which way north went. Both are
-standard cartographic furniture and both are one pipe step here.
+A map without a scale bar does not tell you how big anything is, and a projected map
+without a graticule does not tell you which way north went. Both are standard
+cartographic furniture and both are one pipe step here.
 
-`mark_scalebar()` draws a segmented distance bar and `mark_compass()` a north
-arrow. Neither takes data aesthetics — they are fixed decorations pinned to a
-panel corner, in millimetres from the edge. Graticule lines are not a mark at
-all: they belong *behind* the map, so `coord_sf(graticule = TRUE)` draws them.
+`mark_scalebar()` draws a segmented distance bar and `mark_compass()` a north arrow.
+Neither takes data aesthetics; they are fixed decorations pinned to a panel corner,
+in millimetres from the edge. Graticule lines are not a mark at all. They belong
+*behind* the map, so `coord_sf(graticule = TRUE)` draws them.
 
 The 100 counties of North Carolina, births in 1974. The graticule carries its own
-degree labels, so the ordinary axis text — projected metres, which nobody wants to
-read — is blanked out:
+degree labels, so the ordinary axis text (projected metres, which nobody wants to
+read) is blanked out:
 
 ```{r}
 p <- vplot(nc, width = 7.5, height = 4.4) |>
@@ -44,12 +44,12 @@ vg(p, "map-decorations")
 
 ## The bar picks its own round number
 
-Left alone, `mark_scalebar()` chooses a round distance near a quarter of the
-panel width — the number a cartographer would have picked — and measures it in
-the panel's projected coordinates, so it is correct for the `crs` you asked
-`coord_sf()` for rather than for whatever the data happened to arrive in. Set
-`distance` when you want a specific length, `segments` for how many alternating
-blocks it is divided into, and `unit` for `"km"`, `"m"`, `"mi"`, or `"ft"`.
+Left alone, `mark_scalebar()` chooses a round distance near a quarter of the panel
+width, the number a cartographer would have picked, and measures it in the panel's
+projected coordinates. So it is correct for the `crs` you asked `coord_sf()` for
+rather than for whatever the data happened to arrive in. Set `distance` when you
+want a specific length, `segments` for how many alternating blocks it is divided
+into, and `unit` for `"km"`, `"m"`, `"mi"`, or `"ft"`.
 
 ```{r}
 p2 <- vplot(nc, width = 7.5, height = 4.4) |>
@@ -68,12 +68,12 @@ p2 <- vplot(nc, width = 7.5, height = 4.4) |>
 vg(p2, "map-decorations-styled")
 ```
 
-Both decorations take `color` and `fill` (the scale bar's segments alternate
-between them; the compass arrow is `fill` with a `color` outline), a `pad` inset,
-and one of four corners — `"bottomleft"`, `"bottomright"`, `"topleft"`,
-`"topright"`, or the `"bl"`/`"br"`/`"tl"`/`"tr"` abbreviations. `mark_compass()`
-also takes a `rotation`, for pointing at grid north on a rotated layout, and
-`text = FALSE` if you want the arrow without the "N".
+Both decorations take `color` and `fill` (the scale bar's segments alternate between
+them; the compass arrow is `fill` with a `color` outline), a `pad` inset, and one of
+four corners: `"bottomleft"`, `"bottomright"`, `"topleft"`, `"topright"`, or the
+`"bl"`/`"br"`/`"tl"`/`"tr"` abbreviations. `mark_compass()` also takes a `rotation`,
+for pointing at grid north on a rotated layout, and `text = FALSE` if you want the
+arrow without the "N".
 
 See [Choropleth map](choropleth.qmd) for the projection side of `coord_sf()`, and
 [Interactive choropleth](choropleth-interactive.qmd) for the same map as a

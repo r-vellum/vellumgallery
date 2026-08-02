@@ -1,6 +1,6 @@
 ---
 title: "Labels that follow the curve"
-description: "mark_text_path() sets one label per group along that group's own path, each glyph rotated to the local tangent — direct labelling instead of a legend."
+description: "mark_text_path() sets one label per group along that group's own path, each glyph rotated to the local tangent: direct labelling instead of a legend."
 categories: [Text]
 image: figs/text-path-diets.png
 ---
@@ -10,18 +10,18 @@ image: figs/text-path-diets.png
 source("_helper.R")
 ```
 
-A legend asks the reader to hold four colours in their head and look back and
-forth. Writing the name on the line does not. The obstacle has always been that
-a line is not horizontal, so an axis-aligned label either crosses it at an angle
-or sits awkwardly beside it.
+A legend asks the reader to hold four colours in their head and look back and forth.
+Writing the name on the line does not. The obstacle has always been that a line is
+not horizontal, so an axis-aligned label either crosses it at an angle or sits
+awkwardly beside it.
 
 `mark_text_path()` puts the glyphs *on* the path. It takes the group's `x`/`y`
-points, walks them in data order, and rotates each glyph to the local tangent —
-the same idea as SVG's `textPath`, except the layout is solved in the engine, so
-it works identically in PNG, SVG, and PDF.
+points, walks them in data order, and rotates each glyph to the local tangent, the
+same idea as SVG's `textPath` except that the layout is solved in the engine, so it
+works identically in PNG, SVG, and PDF.
 
-Mean chick weight by diet, from `datasets::ChickWeight`, with each diet named on
-its own curve and no legend at all.
+Mean chick weight by diet, from `datasets::ChickWeight`, with each diet named on its
+own curve and no legend at all.
 
 ```{r}
 cw <- aggregate(weight ~ Time + Diet, data = ChickWeight, FUN = mean)
@@ -46,16 +46,15 @@ p <- vplot(cw, width = 7, height = 4.6) |>
 vg(p, "text-path-diets")
 ```
 
-`hjust` slides the run along the path — `"left"` starts it at the first point,
-`"right"` ends it at the last, `"centre"` centres it — and `offset` lifts it off
-the baseline in points, positive being to the left of travel. Here the labels are
-pushed to the end of each curve and raised clear of the line.
+`hjust` slides the run along the path: `"left"` starts it at the first point,
+`"right"` ends it at the last, `"centre"` centres it. `offset` lifts it off the
+baseline in points, positive being to the left of travel. Here the labels are pushed
+to the end of each curve and raised clear of the line.
 
 ## Which way the path runs matters
 
 Glyphs follow the tangent, so a path walked right-to-left sets its label
-upside-down. That is not a bug to work around but the thing you control: sort the
-path in the direction you want the text to read.
+upside-down. Sort the path in the direction you want the text to read.
 
 ```{r}
 t_up <- seq(pi, 0, length.out = 80)      # left to right along the top
@@ -90,7 +89,7 @@ Each half of the circle is stored in the order it should be read, so both labels
 come out upright even though one rides the top and the other the bottom. Reverse
 either half and its text turns over.
 
-The output is real, selectable `<text>` in SVG — not glyph outlines — so the
-label is still searchable and copyable in a browser. One label is drawn per
-group, taken from the group's first row, and groups split the usual way: a
-discrete `color`, or a distinct `label`, starts a new run.
+The output is real, selectable `<text>` in SVG rather than glyph outlines, so the
+label is still searchable and copyable in a browser. One label is drawn per group,
+taken from the group's first row, and groups split the usual way: a discrete
+`color`, or a distinct `label`, starts a new run.

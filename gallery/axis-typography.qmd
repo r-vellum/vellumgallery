@@ -18,8 +18,8 @@ laender$state <- factor(laender$state, levels = laender$state)
 ```
 
 Long category names are where axis typography stops being cosmetic. Five spending
-categories from `datasets::USPersonalExpenditure`, whose names do not come close
-to fitting their ticks:
+categories from `datasets::USPersonalExpenditure`, whose names do not come close to
+fitting their ticks:
 
 ```{r}
 spend <- data.frame(
@@ -39,14 +39,14 @@ vg(p, "typography-wrap")
 ```
 
 Nothing collides. A discrete label too long for its tick spacing **wraps** onto as
-many lines as it needs, and the label row grows to fit — because the engine
-measures the text before the layout is committed, it knows both how wide the label
-is and how much room the tick has. Labels that already fit are left alone.
+many lines as it needs, and the label row grows to fit. The engine measures the text
+before the layout is committed, so it knows both how wide the label is and how much
+room the tick has. Labels that already fit are left alone.
 
 ## Or rotate them
 
-Wrapping happens at word boundaries, which means it has nothing to work with when
-a name is one long token. German state names are the awkward case: hyphenated,
+Wrapping happens at word boundaries, which means it has nothing to work with when a
+name is one long token. German state names are the awkward case: hyphenated,
 unbreakable, and 22 characters long. Slant them instead.
 
 ```{r}
@@ -62,15 +62,15 @@ vg(p2, "typography-rotate")
 ```
 
 The gutter reserves the *rotated* height, not the horizontal one, so the labels
-never run into the axis title. By default the end of the run is pinned at its
-tick, which is the anchoring you want for a slanted label; give an explicit
+never run into the axis title. By default the end of the run is pinned at its tick,
+which is the anchoring you want for a slanted label; give an explicit
 `hjust`/`vjust` to place it yourself.
 
 ## Titles wrap too
 
-A title longer than the page used to run off it. Now it wraps, and so do
-subtitles and captions — the plot's height grows to accommodate the lines rather
-than the text overprinting the panel.
+A title longer than the page used to run off it. Now it wraps, and so do subtitles
+and captions: the plot's height grows to accommodate the lines rather than the text
+overprinting the panel.
 
 ```{r}
 p3 <- vplot(laender, width = 6, height = 4.2) |>
@@ -114,11 +114,11 @@ vg(p4, "typography-cex")
 
 ## Digits that hold their column
 
-One last detail you are more likely to notice when it is missing: axis tick
-labels are set with tabular figures (the OpenType `tnum` feature), so every digit
-occupies the same width. Numeric ticks therefore line up in a column instead of
-shifting a fraction of a millimetre as the digits change — the same reason a
-spreadsheet uses a tabular font for numbers.
+One last detail you are more likely to notice when it is missing: axis tick labels
+are set with tabular figures (the OpenType `tnum` feature), so every digit occupies
+the same width. Numeric ticks line up in a column instead of shifting a fraction of
+a millimetre as the digits change, for the same reason a spreadsheet sets numbers in
+a tabular font.
 
 ```{r}
 counts <- data.frame(x = seq(0, 40, by = 4), y = c(1111, 1888, 2444, 3777, 4111,
@@ -135,6 +135,6 @@ vg(p5, "typography-tnum")
 ```
 
 All of this rests on the same property: text is measured in the engine, with no
-device open, so layout decisions can depend on how big the text actually is.
-Rich markup in labels is a separate feature — see
+device open, so layout decisions can depend on how big the text actually is. Rich
+markup in labels is a separate feature, covered in
 [Rich text labels with md()](richtext.qmd).

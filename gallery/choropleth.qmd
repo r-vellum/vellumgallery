@@ -9,8 +9,8 @@ categories: [Spatial]
 source("_helper.R")
 ```
 
-vellumplot reads simple-features geometry directly. `mark_sf()` draws the
-polygons and `coord_sf()` handles the projection and aspect ratio.
+vellumplot reads simple-features geometry directly. `mark_sf()` draws the polygons
+and `coord_sf()` handles the projection and aspect ratio.
 
 For a version you can hover, select, and zoom, see the
 [interactive choropleth](choropleth-interactive.qmd).
@@ -31,15 +31,15 @@ vg(p, "choropleth")
 
 ## Dissolving the borders between equal values
 
-Bin the values and a per-feature choropleth starts to lie about its own geometry:
-neighbouring counties in the same class are drawn as separate polygons, so a
-border is stroked twice down the middle of what should read as one region — a
-visible seam, and in PDF an exact one.
+Bin the values and a per-feature choropleth starts to lie about its own geometry.
+Neighbouring counties in the same class are drawn as separate polygons, so a border
+is stroked twice down the middle of what should read as one region: a visible seam,
+and in PDF an exact one.
 
-`mark_sf(merge = TRUE)` dissolves adjacent features that share a fill into a
-single region. The union is real boolean geometry (`vellum::vl_path_op()`), holes
-and multipart features preserved, so each region comes out as one crisp path
-rather than a stack of alpha-composited neighbours.
+`mark_sf(merge = TRUE)` dissolves adjacent features that share a fill into a single
+region. The union is real boolean geometry (`vellum::vl_path_op()`), holes and
+multipart features preserved, so each region comes out as one crisp path rather than
+a stack of alpha-composited neighbours.
 
 ```{r}
 nc$class <- cut(nc$BIR74, breaks = c(0, 1000, 2000, 4000, Inf),
@@ -56,8 +56,9 @@ p_merged <- vplot(nc, width = 8, height = 3.6) |>
 vg(p_merged, "choropleth-merged")
 ```
 
-Compare it with the same classes drawn feature by feature — same colours, but every
-county boundary still there, including the ones between counties of the same class:
+Compare it with the same classes drawn feature by feature. Same colours, but every
+county boundary is still there, including the ones between counties of the same
+class:
 
 ```{r}
 p_unmerged <- vplot(nc, width = 8, height = 3.6) |>
@@ -74,5 +75,5 @@ vg(p_unmerged, "choropleth-unmerged")
 `merge` is ignored on an interactive layer, and necessarily so: merging throws away
 the per-feature keys a widget needs to know which county you hovered.
 
-For the cartographic furniture — a scale bar, a north arrow, a graticule — see
+For the cartographic furniture (a scale bar, a north arrow, a graticule) see
 [Scale bar, north arrow, graticule](map-decorations.qmd).

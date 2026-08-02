@@ -1,6 +1,6 @@
 ---
 title: "Picking that measures to the mark"
-description: "The widget carries each element's true vertices, not just its bounding box, so a cursor on a line picks that line, a click inside a region hits the region, and a graph edge is hoverable along its length."
+description: "The widget carries each element's true vertices alongside its bounding box, so a cursor on a line picks that line, a click inside a region hits the region, and a graph edge is hoverable along its length."
 categories: [Interactive]
 image: figs/hit-testing.png
 ---
@@ -30,18 +30,18 @@ render_plot(prev, "figs/hit-testing.png", dpi = 150)
 ```
 
 Hover-picking in a web chart usually works on bounding boxes, because a box is all
-the host knows. For points that is fine. For anything long and thin it is quietly
-wrong: a diagonal line's box covers most of the panel, so "the nearest mark" can be
-a series whose ink is nowhere near the cursor.
+the host knows. That is fine for points. For anything long and thin it gives wrong
+answers: a diagonal line's box covers most of the panel, so "the nearest mark" can
+be a series whose ink is nowhere near the cursor.
 
 vellum knows the actual shape. `element_geometry()` reports each element's true
-vertices in device pixels, and `as_widget()` ships them, so picking is a two-step:
-an R-tree shortlists candidates by box (a box distance is never greater than the
-true distance, so nothing in range is missed), and the shortlist is then ranked by
-distance to the *real* geometry.
+vertices in device pixels and `as_widget()` ships them, so picking happens in two
+steps. An R-tree shortlists candidates by box, which is safe because a box distance
+is never greater than the true distance, so nothing in range is missed. The
+shortlist is then ranked by distance to the real geometry.
 
-Four series whose boxes each cover most of the panel. Run the cursor along one
-line and the tooltip follows that line, not whichever box you happen to be inside:
+Four series whose boxes each cover most of the panel. Run the cursor along one line
+and the tooltip follows that line, not whichever box you happen to be inside:
 
 ```{r}
 vplot(series) |>
@@ -54,31 +54,31 @@ vplot(series) |>
 
 What this changes, concretely:
 
-- **A diagonal is no longer matched from the far corner of its box.** On a chart
-  like this one, two or more series used to tie at box-distance zero almost
-  everywhere in the panel.
-- **A click inside a filled region hits the region**, at distance zero, instead of
+- A diagonal is no longer matched from the far corner of its box. On a chart like
+  this one, two or more series used to tie at box-distance zero almost everywhere in
+  the panel.
+- A click inside a filled region hits the region, at distance zero, instead of
   snapping to whichever border happens to be nearest.
-- **Graph edges are hoverable.** An edge's box is the whole rectangle its endpoints
-  span, so box-picking matched it from anywhere in that rectangle — edges had to be
-  excluded from nearest-mark snapping altogether. They are now measured to the line
-  and compete on their merits.
-- **Round marks are measured to the disc**, not to the square around it.
+- Graph edges are hoverable. An edge's box is the whole rectangle its endpoints
+  span, so box-picking matched it from anywhere inside that rectangle, and edges had
+  to be excluded from nearest-mark snapping altogether. They are now measured to the
+  line and compete on their merits.
+- Round marks are measured to the disc rather than the square around it.
 
-Only the kinds whose shape is not their box — segment, line, polygon, path — carry
-vertices. A point's disc and a label's box are reconstructed from the bounding box
-the payload already has, so a dense scatter, where payload size actually bites,
+Vertices are shipped only for the kinds whose shape is not their box: segment, line,
+polygon, path. A point's disc and a label's box are reconstructed from the bounding
+box the payload already has, so a dense scatter, where payload size actually bites,
 pays nothing for any of this. Above half a million vertices the block is dropped
-with a message and picking falls back to boxes. Brush and lasso are unchanged: a
-box is the right answer for a rectangular brush, which is what it was always for.
+with a message and picking falls back to boxes. Brush and lasso are unchanged; a box
+was always the right answer for a rectangular brush.
 
 ## From a mark back to its rows
 
 The other half of knowing which element you clicked is knowing what is behind it.
 `inspect_source()` declares that a host should surface the *source data rows* for a
-clicked element — a graph node aggregating twelve observations, a bar summing
-thirty. It rides on the spec rather than on `as_widget()`, so it costs a plain
-widget nothing, and it is inert in a static render.
+clicked element: a graph node aggregating twelve observations, a bar summing thirty.
+It rides on the spec rather than on `as_widget()`, so it costs a plain widget
+nothing, and it is inert in a static render.
 
 ```{r}
 counts <- aggregate(mpg ~ cyl + gear, data = mtcars, FUN = mean)
@@ -102,11 +102,11 @@ the same gesture sets `input$<id>_source`, and in plain HTML it fires a bubbling
 `vellum:source` DOM event you can listen for. Pass `inspect_source(values = TRUE)`
 to ship the row *values* too, at the cost of a heavier payload.
 
-One more thing worth mentioning because it is invisible when it works: when a plot
-has too many keyed marks to ship as per-element SVG, the widget draws the scene
-once as a raster and runs interactions off a compact index — and that raster is now
-rendered at 2× and encoded in memory, so it is sharp on a retina screen without
-touching disk. The bounding boxes and panel rectangles stay in device pixels, so
-nothing about picking or pan/zoom changes. See
+One detail you only notice when it is missing: when a plot has too many keyed marks
+to ship as per-element SVG, the widget draws the scene once as a raster and runs
+interactions off a compact index. That raster is now rendered at 2× and encoded in
+memory, so it is sharp on a retina screen without touching disk. The bounding boxes
+and panel rectangles stay in device pixels, so nothing about picking or pan/zoom
+changes. See
 [A big scatter that stays interactive](big-interactive.qmd) for that path at
 120,000 points.

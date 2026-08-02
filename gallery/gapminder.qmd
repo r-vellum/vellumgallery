@@ -10,22 +10,21 @@ image: figs/gapminder.png
 source("_helper.R")
 ```
 
-vellumplot animates a plot by compiling one **keyframe** per state and tweening
-the frames between them. The scales are trained **once over every state and
-frozen**, so the axes, the colour ramp and the size legend stay put while the
-data moves — the animation is non-reactive (the states are fixed up front,
-nothing retrains).
+vellumplot animates a plot by compiling one **keyframe** per state and tweening the
+frames between them. The scales are trained **once over every state and frozen**, so
+the axes, the colour ramp and the size legend stay put while the data moves. The
+animation is non-reactive: the states are fixed up front and nothing retrains.
 
 `transition_time()` is the right idiom for a continuous time like `year`: it
-allocates frames in proportion to the gaps between years and never pauses or
-wraps, so the bubbles glide at a constant rate. `animate()` compiles the
-keyframes and `anim_save()` tweens, renders (in parallel), and encodes the frames
-— all in one pass on the Rust backend. The extension chooses the format: `.png`
-here for a full-colour, lossless animated PNG (a plot's antialiased edges need
-more than GIF's 256 colours per frame), or `.gif` for the smaller, universally
-embeddable version. There is a third option, `.svg`, which emits every frame as
-vector markup — the right answer for line art and the wrong one for 142 bubbles
-per frame, which is why this page is an APNG. See
+allocates frames in proportion to the gaps between years and never pauses or wraps,
+so the bubbles glide at a constant rate. `animate()` compiles the keyframes and
+`anim_save()` tweens, renders (in parallel), and encodes the frames, all in one pass
+on the Rust backend. The extension chooses the format: `.png` here for a
+full-colour, lossless animated PNG (a plot's antialiased edges need more than GIF's
+256 colours per frame), or `.gif` for the smaller, universally embeddable version.
+There is a third option, `.svg`, which emits every frame as vector markup: the right
+answer for line art and the wrong one for 142 bubbles a frame, so this page is an
+APNG. See
 [An animation with no pixels in it](animated-svg.qmd) for that side of the trade.
 
 ```{r}
