@@ -82,3 +82,43 @@ To hatch a single shape without a legend, write the builder straight into
 `fill` (`mark_bar(fill = pattern_crosshatch())`). The `pattern` aesthetic works
 the same way on areas, tiles, boxplots, violins, ridgelines, and `sf` polygons,
 so a greyscale-safe legend is one line away on any filled mark.
+
+## The vector one
+
+Those five are tiles: a small image repeated across the shape. `pattern_hatch()` is
+their vector counterpart — evenly spaced parallel lines produced as real geometry
+(`vellum::vl_hatch()`) instead of a rasterised tile. Two things follow. It stays
+crisp at any magnification and embeds no image in a PDF, which makes it the better
+choice for print. And it is not bound by seamless tiling, so `angle` can be
+*anything* rather than one of 0, 45, 90, 135.
+
+```{r}
+angles <- data.frame(
+  angle = factor(c("15°", "40°", "65°", "115°", "160°"),
+                 levels = c("15°", "40°", "65°", "115°", "160°")),
+  h = 1
+)
+
+p <- vplot(angles, width = 7, height = 3.2) |>
+  mark_bar(x = angle, y = h, pattern = angle) |>
+  scale_pattern(values = list(
+    pattern_hatch(angle = 15, spacing = 2.2),
+    pattern_hatch(angle = 40, spacing = 2.2),
+    pattern_hatch(angle = 65, spacing = 2.2),
+    pattern_hatch(angle = 115, spacing = 2.2),
+    pattern_hatch(angle = 160, spacing = 2.2)
+  )) |>
+  guides(pattern = "none") |>
+  labs(title = "Vector hatch, at any angle you like", x = NULL, y = NULL)
+```
+
+```{r}
+#| echo: false
+vg(p, "pattern-hatch-angles")
+```
+
+It takes the same `color`, `bg`, `spacing`, and `linewidth` arguments as the tile
+builders, and is used the same two ways — as a constant `fill`, or as a
+`scale_pattern(values = )` entry. It is the "fix it" step of the accessibility
+workflow: [`plot_lint()` flags a problem and `render_plot(cvd = )` shows it](plot-lint.qmd),
+and a redundant non-colour encoding is what actually solves it.

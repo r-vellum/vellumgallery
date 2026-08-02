@@ -1,0 +1,81 @@
+---
+title: "Icons as vector markers"
+description: "A point shape can be an SVG icon — a path d string or a .svg file — drawn as crisp vector geometry rather than a raster pasted at every point."
+categories: [Basics, Images]
+image: figs/svg-markers-mapped.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+Using icons as plotting symbols in R has usually meant rasterising: one small
+PNG stamped at every data point, soft at any zoom and useless in print. But an
+icon set already ships the thing you actually want — a path `d` string. vellum
+can draw that path directly (`vellum::svg_grob()`), so `shape` accepts one.
+
+Pass a literal `d` string for a constant marker:
+
+```{r}
+plane <- paste0(
+  "M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1",
+  "L15 22v-1.5L13 19v-5.5z"
+)
+
+p <- vplot(mtcars, width = 7, height = 4.4) |>
+  mark_point(x = wt, y = mpg, shape = !!plane, size = 1.4, color = "#6b4f2c") |>
+  labs(title = "One icon, every point", x = "weight (1000 lbs)", y = "mpg")
+```
+
+`shape` is a tidy-eval channel like any other, so a bare `plane` would be looked
+up as a column of the data. Inline the string, or inject the variable with `!!` as
+above. `size` is in millimetres, as it is for the built-in glyphs.
+
+```{r}
+#| echo: false
+vg(p, "svg-markers-constant")
+```
+
+## One icon per level
+
+Map `shape` to a discrete variable and give `scale_shape(values = )` one icon per
+level. The legend draws the icons themselves, and the `size` aesthetic scales
+them like any other marker.
+
+```{r}
+star <- "M12 2l3 7h7l-5.5 4.5 2 7-6.5-4.5-6.5 4.5 2-7L2 9h7z"
+heart <- paste0(
+  "M12 21s-7.5-4.7-9.3-9.1C1.3 8.4 3.3 5 6.7 5c2 0 3.5 1.1 4.3 2.3",
+  "H13c.8-1.2 2.3-2.3 4.3-2.3 3.4 0 5.4 3.4 4 6.9C19.5 16.3 12 21 12 21z"
+)
+bolt <- "M13 2L4.5 13.5H11l-1 8.5L19.5 10H13z"
+
+cars <- data.frame(
+  wt = mtcars$wt, mpg = mtcars$mpg,
+  cyl = factor(mtcars$cyl, labels = c("4 cyl", "6 cyl", "8 cyl"))
+)
+
+p2 <- vplot(cars, width = 7, height = 4.4) |>
+  mark_point(x = wt, y = mpg, shape = cyl, color = cyl, size = 1.5) |>
+  scale_shape(values = c(star, heart, bolt)) |>
+  labs(title = "Three icons, one per level", x = "weight (1000 lbs)", y = "mpg")
+```
+
+```{r}
+#| echo: false
+vg(p2, "svg-markers-mapped")
+```
+
+A `values` entry may also be a path to a `.svg` file, which is the practical
+route when the icons come from a downloaded set rather than pasted inline.
+Built-in glyph names (`"circle"`, `"square"`, `"triangle"`, `"diamond"`, `"plus"`,
+`"cross"`, `"triangle_down"`, `"star"`) still work, and can be mixed with SVG
+values in the same scale.
+
+Because the marker is geometry, it survives everything geometry survives: zoom
+into the SVG and the edges stay sharp, and the PDF carries paths rather than an
+embedded bitmap per point. One gap to know about: per-icon interactivity is not
+wired up yet, so `data_id` on an SVG-marker layer does not give you a hoverable
+icon — the icons render on every backend, they just are not yet pickable in a
+widget.

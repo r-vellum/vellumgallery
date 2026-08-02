@@ -1,0 +1,115 @@
+---
+title: "A figure that carries its own provenance"
+description: "plot_manifest() fingerprints a plot's data, spec, and resolved fonts; plot_svg(manifest = TRUE) embeds that in the file; plot_verify() checks a figure still matches its data — and tells a font difference apart from a data change."
+categories: [Backend]
+image: figs/provenance.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+Six months after a report ships, somebody asks whether figure 3 was made from the
+data currently in the repository. Usually there is no way to answer that except to
+re-run the script and compare images by eye — which fails for reasons that have
+nothing to do with the data, because the machine has a different font stack now.
+
+Since a vellumplot plot is a spec rather than a picture, it can be fingerprinted
+before it is drawn.
+
+```{r}
+p <- vplot(mtcars, width = 6.5, height = 4) |>
+  mark_point(x = wt, y = mpg, color = hp, size = 2.2) |>
+  mark_smooth(x = wt, y = mpg, method = "lm", se = TRUE) |>
+  scale_color_continuous() |>
+  labs(title = "Weight against mileage", x = "weight (1000 lbs)", y = "mpg",
+       color = "hp")
+```
+
+```{r}
+#| echo: false
+vg(p, "provenance")
+```
+
+`plot_manifest()` returns that fingerprint: a hash of the input data (sensitive to
+row order and columns), the data's shape, a structural hash of the spec, how many
+elements the plot emits, and the font faces it actually resolved to.
+
+```{r}
+m <- plot_manifest(p)
+m$data$hash
+m$spec_hash
+m$n_elements
+```
+
+The fonts are the part that is easy to overlook and the part that makes the check
+usable:
+
+```{r}
+str(m$fonts, max.level = 2, list.len = 2)
+```
+
+## Embedding it in the file
+
+`plot_svg(manifest = TRUE)` writes the SVG with the manifest inside it, so the
+figure travels with its own provenance. `plot_verify()` reads it back and
+recomputes the data hash:
+
+```{r}
+svg <- plot_svg(p, manifest = TRUE)
+check <- plot_verify(svg, mtcars)
+check$ok
+```
+
+Hand it different data and it says so — and says *which* thing changed:
+
+```{r}
+tampered <- mtcars
+tampered$mpg[1] <- tampered$mpg[1] + 1
+
+bad <- plot_verify(svg, tampered)
+c(ok = bad$ok, data_ok = bad$data_ok, fonts_ok = bad$fonts_ok)
+```
+
+That split is the point. `data_ok` is whether the data still hashes the same;
+`fonts_ok` is whether every font the figure was drawn with is still on this
+machine. A pixel difference with `data_ok = TRUE` and `fonts_ok = FALSE` is the
+font stack, not your analysis — a different cause with a different fix (install the
+font) than a changed dataset. Reporting them together as "the figure does not
+match" is what makes reproducibility checks so easy to ignore.
+
+```{r}
+bad$expected
+bad$actual
+```
+
+## The scene is a value too
+
+One layer down, the same idea applies to the scene rather than the plot.
+`vellum::scene_hash()` and `scene_diff()` compare two scenes structurally — what
+changed, not which pixels — which is a better regression test than an image diff,
+because it does not care what the font stack looks like on the machine running the
+test.
+
+```{r}
+library(vellum)
+a <- vl_scene(4, 2, bg = "white") |>
+  draw(circle_grob(x = 0.4, y = 0.5, r = 0.2, gp = vl_gpar(fill = "#c9a874"),
+                   name = "blob"))
+b <- vl_scene(4, 2, bg = "white") |>
+  draw(circle_grob(x = 0.4, y = 0.5, r = 0.2, gp = vl_gpar(fill = "#c1121f"),
+                   name = "blob"))
+
+scene_hash(a) == scene_hash(b)
+```
+
+```{r}
+#| message: true
+scene_diff(a, b)
+```
+
+Both of these are checks you can put in a test suite and have them mean something
+in CI, where there is no display, no fonts you chose, and no human to look at the
+picture. See also [One scene, three formats](three-formats.qmd) for why the same
+solved scene is what every backend walks.

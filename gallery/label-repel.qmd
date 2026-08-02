@@ -1,0 +1,107 @@
+---
+title: "Labels that get out of each other's way"
+description: "repel = TRUE hands label placement to the engine solver, which works in device pixels — so facets, polar coordinates, and warped panels all repel correctly, in one pass with no second compile."
+categories: [Text]
+image: figs/repel-after.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+arrests <- data.frame(
+  state = rownames(USArrests),
+  murder = USArrests$Murder,
+  assault = USArrests$Assault,
+  region = state.region[match(rownames(USArrests), state.name)]
+)
+```
+
+Fifty state names on one scatter, anchored at their points, produce a pile of
+overlapping text. `datasets::USArrests`, murder rate against assault rate:
+
+```{r}
+p_bad <- vplot(arrests, width = 7, height = 4.8) |>
+  mark_point(x = assault, y = murder, size = 1.8, color = "#6b4f2c") |>
+  mark_text(x = assault, y = murder, label = state, size = 7) |>
+  labs(title = "Anchored at the point", x = "assaults per 100k", y = "murders per 100k")
+```
+
+```{r}
+#| echo: false
+vg(p_bad, "repel-before")
+```
+
+Add `repel = TRUE` and the labels move apart:
+
+```{r}
+p_good <- vplot(arrests, width = 7, height = 4.8) |>
+  mark_point(x = assault, y = murder, size = 1.8, color = "#6b4f2c") |>
+  mark_text(x = assault, y = murder, label = state, size = 7, repel = TRUE) |>
+  xlim(20, 380) |>
+  labs(title = "Repelled", x = "assaults per 100k", y = "murders per 100k")
+```
+
+```{r}
+#| echo: false
+vg(p_good, "repel-after")
+```
+
+## Where it happens matters
+
+The placement is solved by the engine (`vellum::vl_repel()`), not by the
+grammar, and it is solved in **device pixels** — the space the glyphs actually
+occupy — then applied back as an absolute millimetre offset. Two consequences.
+
+The first is that it is one pass. The plot compiles, the solver reads the boxes
+it produced, and the answer is applied; there is no second compile and no
+iteration between the grammar and the renderer. The solver is deterministic, so
+the same plot gives the same placement every time (the old `seed` argument is
+kept but inert).
+
+The second is that it is coordinate-agnostic. Because it never touches the data
+scales, it does not care what shape the panel is or how the coordinate system
+warps. A faceted plot is solved per panel, with each panel's labels kept inside
+it:
+
+```{r}
+p_facet <- vplot(arrests, width = 7.5, height = 5) |>
+  mark_point(x = assault, y = murder, size = 1.6, color = "#6b4f2c") |>
+  mark_text(x = assault, y = murder, label = state, size = 6, repel = TRUE) |>
+  facet_wrap(~region) |>
+  xlim(0, 400) |>
+  labs(title = "Solved per panel", x = "assaults per 100k", y = "murders per 100k")
+```
+
+```{r}
+#| echo: false
+vg(p_facet, "repel-facets")
+```
+
+And a polar panel repels too, which used to be a hard error — placement in a
+warped coordinate system is exactly the case that a solver working in data
+coordinates cannot handle, and exactly the case that one working in device pixels
+never notices:
+
+```{r}
+top <- arrests[order(-arrests$assault), ][1:14, ]
+top$state <- factor(top$state, levels = top$state)
+
+p_polar <- vplot(top, width = 6.5, height = 5.4) |>
+  mark_bar(x = state, y = assault, fill = "#c9a874") |>
+  mark_text(x = state, y = assault, label = state, size = 7, repel = TRUE) |>
+  coord_polar() |>
+  labs(title = "Repelled in polar coordinates", x = NULL, y = NULL) |>
+  theme(axis.text.x = element_blank())
+```
+
+```{r}
+#| echo: false
+vg(p_polar, "repel-polar")
+```
+
+The leader lines come from the same solve that placed the labels, so they point
+where the label actually went. That matters more than it sounds: if you draw
+leaders yourself from a separate `vellum::vl_place()` call, place first and
+annotate afterwards — anything already in the scene is an obstacle to a later
+solve, and a leader lying exactly along the route a label wanted to take will
+push that label straight back where it came from.

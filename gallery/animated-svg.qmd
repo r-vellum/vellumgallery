@@ -1,0 +1,84 @@
+---
+title: "An animation with no pixels in it"
+description: "anim_save(\".svg\") writes a keyframe animation as a single animated SVG: every frame emitted as vector markup, stepped by CSS, crisp at any size, and held still for a reader who asked for no motion."
+categories: [Animation]
+image: figs/animated-svg-poster.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+A GIF of a chart is a stack of screenshots. Zoom in and it blurs, print it and it
+is 96 dpi forever, and the text in it is a picture of text. But an animation built
+from keyframes does not have to be raster at all: each frame is a solved scene,
+and a solved scene can be written as vector markup.
+
+`anim_save()` picks its format from the extension, and `.svg` gives you one
+animated SVG — every frame emitted in full, shown in turn by a CSS step
+animation. No JavaScript, nothing to load, one file.
+
+A three-state transition over `cyl`, tweened by the engine:
+
+```{r}
+cars <- data.frame(
+  wt = mtcars$wt, mpg = mtcars$mpg, hp = mtcars$hp,
+  cyl = paste(mtcars$cyl, "cylinders")
+)
+
+a <- vplot(cars, width = 6.5, height = 4) |>
+  mark_point(x = wt, y = mpg, size = hp / 45, color = "#6b4f2c", alpha = 0.85) |>
+  transition_states(cyl) |>
+  labs(title = "Weight against mileage, by engine",
+       x = "weight (1000 lbs)", y = "miles per gallon") |>
+  animate(fps = 12, nframes = 48)
+```
+
+```{r}
+#| echo: false
+dir.create("figs", showWarnings = FALSE)
+anim_save("figs/animated-svg.svg", a)
+# A first-frame poster for the gallery card.
+render_plot(
+  vplot(cars[grepl("^4", cars$cyl), ], width = 6.5, height = 4) |>
+    mark_point(x = wt, y = mpg, size = hp / 45, color = "#6b4f2c", alpha = 0.85) |>
+    labs(title = "Weight against mileage, by engine",
+         x = "weight (1000 lbs)", y = "miles per gallon"),
+  "figs/animated-svg-poster.png", dpi = 150
+)
+knitr::include_graphics("figs/animated-svg.svg")
+```
+
+```{r}
+#| eval: false
+anim_save("engines.svg", a)
+```
+
+Two things come free with the format. It is resolution-independent, so it is as
+crisp on a retina screen or at 400% zoom as it is here. And it honours
+`prefers-reduced-motion`: a reader whose system says "do not animate" gets the
+first frame, held — handled inside the SVG itself, not by a script that may or may
+not run.
+
+## When not to use it
+
+An animated SVG emits *every frame in full*, so its weight grows with marks times
+frames, where a raster format's does not. That makes the trade sharp rather than a
+matter of taste:
+
+- **Line art** — a handful of moving marks, the ordinary explanatory animation —
+  is where SVG wins outright.
+- **A dense scatter or a datashaded field** is where a raster format is simply the
+  right answer.
+
+`anim_save()` will tell you when a `.svg` scene is dense enough that GIF or APNG
+would likely be smaller, so you do not have to guess. For the raster side of the
+same API — and for the tweening, easing, and frozen-scale machinery underneath —
+see [the animated gapminder bubble chart](gapminder.qmd), which is an APNG for
+exactly this reason.
+
+An animation also goes into a widget: `vellumwidget::as_widget()` accepts a
+`vellum_animation` and embeds this same animated SVG, self-contained. Since every
+mark moves each frame there is no per-element interaction index behind it — it
+plays, it does not respond.

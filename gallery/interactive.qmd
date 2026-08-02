@@ -17,7 +17,10 @@ render_plot(prev, "figs/interactive.png", dpi = 150)
 
 Pipe any vellumplot into `as_widget()` and it becomes a self-contained HTML
 widget: hover a point for a tooltip, click to select, drag a rectangle to brush,
-scroll to zoom. It runs entirely in the browser, with no server.
+scroll to zoom. Nothing is re-drawn to get there. The widget ships the very SVG
+vellum solved, plus the table of where each element landed, so the interactive
+figure and the static one cannot drift apart — and picking measures to the mark
+itself rather than to the box around it.
 
 Declare `tooltip` and `data_id` on the mark to give each point a label and a
 stable key for interactions.

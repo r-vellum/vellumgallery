@@ -517,6 +517,59 @@
   function hasBbox(e) {
     return typeof e.x0 === "number" && typeof e.y0 === "number";
   }
+  function isRoundMark(mark) {
+    return mark === "point" || mark === "points" || mark === "circle" || mark === "circles";
+  }
+  function distToSegment2(x, y, ax, ay, bx, by) {
+    const vx = bx - ax, vy = by - ay;
+    const len2 = vx * vx + vy * vy;
+    let t = len2 > 0 ? ((x - ax) * vx + (y - ay) * vy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const dx = x - (ax + t * vx), dy = y - (ay + t * vy);
+    return dx * dx + dy * dy;
+  }
+  function distToGeom(x, y, g, gx, gy, box) {
+    const at = g.at, n = g.n;
+    if (n <= 0) return Infinity;
+    if (g.kind === "point") {
+      const dx = x - gx[at], dy = y - gy[at];
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const r = box ? Math.min(box.x1 - box.x0, box.y1 - box.y0) / 2 : 0;
+      return d > r ? d - r : 0;
+    }
+    if (n === 1) {
+      const dx = x - gx[at], dy = y - gy[at];
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    if (g.kind === "rect" || g.kind === "text" || g.kind === "roundrect") {
+      return distToBbox(x, y, {
+        x0: Math.min(gx[at], gx[at + 1]),
+        x1: Math.max(gx[at], gx[at + 1]),
+        y0: Math.min(gy[at], gy[at + 1]),
+        y1: Math.max(gy[at], gy[at + 1])
+      });
+    }
+    const closed = g.kind === "polygon" || g.kind === "path";
+    if (closed && n >= 3) {
+      let inside = false;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const xi = gx[at + i], yi = gy[at + i];
+        const xj = gx[at + j], yj = gy[at + j];
+        if (yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      if (inside) return 0;
+    }
+    let best = Infinity;
+    for (let i = 1; i < n; i++) {
+      const d2 = distToSegment2(x, y, gx[at + i - 1], gy[at + i - 1], gx[at + i], gy[at + i]);
+      if (d2 < best) best = d2;
+    }
+    if (closed && n >= 3) {
+      const d2 = distToSegment2(x, y, gx[at + n - 1], gy[at + n - 1], gx[at], gy[at]);
+      if (d2 < best) best = d2;
+    }
+    return Math.sqrt(best);
+  }
   function asColumn(v) {
     if (v == null) return [];
     return Array.isArray(v) ? v : [v];
@@ -543,6 +596,8 @@
     const cond = c.cond != null ? asColumn(c.cond) : null;
     const filt = c.filt != null ? asColumn(c.filt) : null;
     const join = c.join != null ? asColumn(c.join) : null;
+    const source = c.source != null ? asColumn(c.source) : null;
+    const target = c.target != null ? asColumn(c.target) : null;
     const out = new Array(n);
     for (let i = 0; i < n; i++) {
       const e = { key: String(key[i]) };
@@ -574,6 +629,8 @@
         }
       }
       if (join && join[i] != null) e.join = String(join[i]);
+      if (source && source[i] != null) e.source = String(source[i]);
+      if (target && target[i] != null) e.target = String(target[i]);
       out[i] = e;
     }
     return out;
@@ -969,6 +1026,12 @@
     const hit = el.closest("[data-key]");
     return hit ? hit.getAttribute("data-key") : null;
   }
+  function vellumIdOf(target) {
+    const el = target;
+    if (!el || typeof el.closest !== "function") return null;
+    const hit = el.closest("[data-vellum-id]");
+    return hit ? hit.getAttribute("data-vellum-id") : null;
+  }
   function download(blob, name) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1018,6 +1081,7 @@
       let colorbar = null;
       let colorbarLayer = null;
       let interactions = null;
+      let provenance = null;
       let condTagElems = {};
       let filtSelElems = {};
       let joinOf = {};
@@ -1026,6 +1090,10 @@
       let colorHiddenSet = {};
       let meta = {};
       let groups = {};
+      let incidentEdges = {};
+      let neighbourNodes = {};
+      let edgeEndpoints = {};
+      let neighbourExpand = null;
       let legendIndex = {};
       let legendSwatch = {};
       let legendOff = {};
@@ -1038,6 +1106,10 @@
       let hoverRAF = 0;
       let spatialIndex = null;
       let indexToElem = [];
+      let geomByKey = {};
+      let gx = new Float64Array(0);
+      let gy = new Float64Array(0);
+      let haveGeometry = false;
       const DIM_OVERLAY_MIN = 2e3;
       let largeDim = false;
       let dimLayer = null;
@@ -1180,9 +1252,46 @@
         const nodes = holder.querySelectorAll("." + cls);
         for (let i = 0; i < nodes.length; i++) nodes[i].classList.remove(cls);
       }
+      function graphNeighbourhood(k, degree, edges) {
+        const seen = { [k]: true };
+        const out = [k];
+        let frontier = [k];
+        for (let d = 0; d < degree; d++) {
+          const next = [];
+          for (let i = 0; i < frontier.length; i++) {
+            const u = frontier[i];
+            if (edges) {
+              const inc = incidentEdges[u] || [];
+              for (let j = 0; j < inc.length; j++) {
+                if (!seen[inc[j]]) {
+                  seen[inc[j]] = true;
+                  out.push(inc[j]);
+                }
+              }
+            }
+            const nb = neighbourNodes[u] || [];
+            for (let j = 0; j < nb.length; j++) {
+              if (!seen[nb[j]]) {
+                seen[nb[j]] = true;
+                out.push(nb[j]);
+                next.push(nb[j]);
+              }
+            }
+          }
+          frontier = next;
+        }
+        return out;
+      }
       function linkedKeys(k) {
         const m = meta[k];
         if (m && m.legend_for != null) return (legendIndex[m.legend_for] || []).concat([k]);
+        if (neighbourExpand) {
+          const ep = edgeEndpoints[k];
+          if (ep) return [k, ep[0], ep[1]];
+          if (incidentEdges[k] || neighbourNodes[k]) {
+            return graphNeighbourhood(k, neighbourExpand.degree, neighbourExpand.edges);
+          }
+        }
         const g = m && m.hover_group;
         return g && groups[g] ? groups[g] : [k];
       }
@@ -1238,6 +1347,50 @@
         idx.finish();
         spatialIndex = idx;
       }
+      function buildGeometry(g) {
+        geomByKey = {};
+        gx = new Float64Array(0);
+        gy = new Float64Array(0);
+        haveGeometry = false;
+        if (!g) return;
+        const keys = asColumn(g.key);
+        const kinds = asColumn(g.kind);
+        const ns = asColumn(g.n);
+        const xs = asColumn(g.x);
+        const ys = asColumn(g.y);
+        if (!keys.length || xs.length !== ys.length) return;
+        gx = Float64Array.from(xs);
+        gy = Float64Array.from(ys);
+        let at = 0;
+        for (let i = 0; i < keys.length; i++) {
+          const n = ns[i] | 0;
+          if (n <= 0 || at + n > gx.length) break;
+          (geomByKey[keys[i]] || (geomByKey[keys[i]] = [])).push({ kind: kinds[i], at, n });
+          at += n;
+        }
+        haveGeometry = at > 0;
+      }
+      function distToElem(x, y, e) {
+        const box = hasBbox(e) ? e : null;
+        const gs = geomByKey[e.key];
+        if (!gs) {
+          if (!box) return Infinity;
+          if (isRoundMark(e.mark)) {
+            const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+            const r = Math.min(box.x1 - box.x0, box.y1 - box.y0) / 2;
+            const dx = x - cx, dy = y - cy;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            return d > r ? d - r : 0;
+          }
+          return distToBbox(x, y, box);
+        }
+        let best = Infinity;
+        for (let i = 0; i < gs.length; i++) {
+          const d = distToGeom(x, y, gs[i], gx, gy, box);
+          if (d < best) best = d;
+        }
+        return best;
+      }
       function buildHoverAxis() {
         const cx = [];
         const cy = [];
@@ -1272,12 +1425,25 @@
         const ks = brushKeysIn(rect);
         return ks.length ? ks : [primary];
       }
+      const PICK_CANDIDATES = 256;
       function nearestKeyAt(x, y, maxDist) {
+        let best = null;
+        let bestD = maxDist;
+        const rank = (e) => {
+          if (e.source != null && !geomByKey[e.key]) return;
+          const d = distToElem(x, y, e);
+          if (d <= bestD) {
+            bestD = d;
+            best = e.key;
+          }
+        };
         if (spatialIndex) {
-          const ids = spatialIndex.neighbors(x, y, 1, maxDist);
-          return ids.length ? elements[indexToElem[ids[0]]].key : null;
+          const ids = spatialIndex.neighbors(x, y, PICK_CANDIDATES, maxDist);
+          for (let i = 0; i < ids.length; i++) rank(elements[indexToElem[ids[i]]]);
+        } else {
+          for (let i = 0; i < elements.length; i++) rank(elements[i]);
         }
-        return nearestKey(elements, x, y, maxDist);
+        return best;
       }
       function brushKeysIn(rect) {
         if (!spatialIndex) return brushKeys(elements, rect);
@@ -1721,7 +1887,21 @@
       }
       function selectionMembers(sel) {
         const set = {};
-        const keys = sel.on === "hover" ? lastHoverKeys : selectedKeys();
+        let keys = sel.on === "hover" ? lastHoverKeys : selectedKeys();
+        if (sel.on !== "hover" && sel.expand && sel.expand.mode === "neighbours" && neighbourExpand) {
+          const out = [];
+          const seen = {};
+          for (let i = 0; i < keys.length; i++) {
+            const proj = linkedKeys(keys[i]);
+            for (let j = 0; j < proj.length; j++) {
+              if (!seen[proj[j]]) {
+                seen[proj[j]] = true;
+                out.push(proj[j]);
+              }
+            }
+          }
+          keys = out;
+        }
         for (let i = 0; i < keys.length; i++) set[keys[i]] = true;
         return set;
       }
@@ -1995,6 +2175,7 @@
         if (!opts.axisZoom || rasterMode || !svgEl || !vb0 || !stage || panels.length !== 1) return;
         const p = panels[0];
         if (!isLinearAxis(p.x) || !isLinearAxis(p.y)) return;
+        if (!svgEl.querySelector('[data-vellum-panel^="axis-x"] text, [data-vellum-panel^="axis-y"] text')) return;
         const pan = svgEl.querySelector('[data-vellum-pan="' + cssEscape(p.name) + '"]');
         const outer = svgEl.querySelector('[data-vellum-panel="' + cssEscape(p.name) + '"]');
         if (!pan || !outer) return;
@@ -2613,6 +2794,55 @@
         down = null;
         dragging = "";
       }
+      function emitSource(target) {
+        if (!provenance) return;
+        const pid = vellumIdOf(target);
+        const raw = pid ? provenance.byId[pid] : void 0;
+        const rows = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+        if (!pid || !rows.length) {
+          hideSourcePopover();
+          return;
+        }
+        shinyInput("source", { id: pid, rows, fields: provenance.fields }, { priority: "event" });
+        const values = provenance.values ? rows.map((r) => provenance.values[r - 1]).filter(Boolean) : null;
+        el.dispatchEvent(
+          new window.CustomEvent("vellum:source", {
+            detail: { id: pid, rows, fields: provenance.fields, values },
+            bubbles: true
+          })
+        );
+        if (values) showSourcePopover(target, values);
+      }
+      let sourcePopover = null;
+      function hideSourcePopover() {
+        if (sourcePopover) {
+          sourcePopover.remove();
+          sourcePopover = null;
+        }
+      }
+      function showSourcePopover(node, values) {
+        hideSourcePopover();
+        const fields = provenance.fields;
+        const head = "<tr>" + fields.map((f) => "<th>" + stripTags(f) + "</th>").join("") + "</tr>";
+        const body = values.slice(0, 12).map(
+          (row) => "<tr>" + fields.map((f) => {
+            var _a;
+            return "<td>" + stripTags(String((_a = row[f]) != null ? _a : "")) + "</td>";
+          }).join("") + "</tr>"
+        ).join("");
+        const extra = values.length > 12 ? "<div class='vw-src-more'>+" + (values.length - 12) + " more</div>" : "";
+        const pop = document.createElement("div");
+        pop.className = "vellumwidget-source";
+        pop.setAttribute("role", "dialog");
+        pop.style.cssText = "position:absolute;z-index:20;max-height:220px;overflow:auto;background:var(--vw-bg,#fff);color:var(--vw-fg,#111);border:1px solid rgba(0,0,0,.2);border-radius:6px;padding:6px 8px;font:11px/1.4 system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.18);max-width:320px;";
+        pop.innerHTML = "<table style='border-collapse:collapse'><thead>" + head + "</thead><tbody>" + body + "</tbody></table>" + extra;
+        const nb = node.getBoundingClientRect();
+        const cb = el.getBoundingClientRect();
+        pop.style.left = Math.min(nb.left - cb.left + 8, Math.max(0, cb.width - 220)) + "px";
+        pop.style.top = Math.max(0, nb.top - cb.top + 8) + "px";
+        el.appendChild(pop);
+        sourcePopover = pop;
+      }
       function onClick(ev) {
         if (movedDuringDrag) {
           movedDuringDrag = false;
@@ -2626,6 +2856,7 @@
           if (k != null && inert(k)) k = null;
         }
         shinyInput("click", { key: k }, { priority: "event" });
+        if (provenance && provenance.on === "click") emitSource(ev.target);
         const series = swatchSeries(k);
         if (series != null && legendPolicy() !== "select") {
           if (!(ev.detail && ev.detail >= 2)) legendToggle(series);
@@ -3072,12 +3303,17 @@
           panels = normalizePanels(x.panels);
           colorbar = x.colorbar || null;
           interactions = x.interactions || null;
+          provenance = x.provenance || null;
           condTagElems = {};
           filtSelElems = {};
           joinOf = {};
           lastHoverKeys = [];
           meta = {};
           groups = {};
+          incidentEdges = {};
+          neighbourNodes = {};
+          edgeEndpoints = {};
+          neighbourExpand = null;
           legendIndex = {};
           legendSwatch = {};
           legendOff = {};
@@ -3091,6 +3327,13 @@
             const e = elements[i];
             meta[e.key] = e;
             if (e.hover_group != null) (groups[e.hover_group] = groups[e.hover_group] || []).push(e.key);
+            if (e.source != null && e.target != null) {
+              edgeEndpoints[e.key] = [e.source, e.target];
+              (incidentEdges[e.source] = incidentEdges[e.source] || []).push(e.key);
+              (incidentEdges[e.target] = incidentEdges[e.target] || []).push(e.key);
+              (neighbourNodes[e.source] = neighbourNodes[e.source] || []).push(e.target);
+              (neighbourNodes[e.target] = neighbourNodes[e.target] || []).push(e.source);
+            }
             if (e.legend != null) {
               const series = Array.isArray(e.legend) ? e.legend : [e.legend];
               for (let s = 0; s < series.length; s++) {
@@ -3098,6 +3341,17 @@
               }
             }
             if (e.legend_for != null) (legendSwatch[e.legend_for] = legendSwatch[e.legend_for] || []).push(e.key);
+          }
+          const sels = interactions && interactions.selections || [];
+          for (let i = 0; i < sels.length; i++) {
+            const ex = sels[i].expand;
+            if (ex && ex.mode === "neighbours") {
+              neighbourExpand = {
+                degree: Math.max(1, Math.floor(ex.degree || 1)),
+                edges: ex.edges !== false
+              };
+              break;
+            }
           }
           if (!holder) {
             stage = document.createElement("div");
@@ -3165,6 +3419,7 @@
               clearPointData();
             }
             buildSpatialIndex();
+            buildGeometry(x.geometry);
             buildHoverAxis();
             wire(svgEl);
             buildToolbar();
@@ -3198,6 +3453,21 @@
           brushKeysIn,
           indexSize: function() {
             return spatialIndex ? spatialIndex.numItems : 0;
+          },
+          // True-geometry picking (WI-3): whether the payload carried geometry, and
+          // the exact distance to one key, so the suite can assert the ranking that
+          // the bbox distance would get wrong.
+          haveGeometry: function() {
+            return haveGeometry;
+          },
+          geomVertexCount: function() {
+            return gx.length;
+          },
+          distToKey: function(x, y, key) {
+            for (let i = 0; i < elements.length; i++) {
+              if (elements[i].key === key) return distToElem(x, y, elements[i]);
+            }
+            return Infinity;
           },
           largeDim: function() {
             return largeDim;
@@ -3280,7 +3550,18 @@
             vb = { x: nvb.x, y: nvb.y, w: nvb.w, h: nvb.h };
             applyViewBox();
           },
-          toView
+          toView,
+          // Graph neighbour highlighting: the projection a hover/click acts on, and
+          // the reconstructed adjacency + the select_neighbours() config.
+          linkedKeys,
+          graphAdjacency: function() {
+            return {
+              incidentEdges,
+              neighbourNodes,
+              edgeEndpoints,
+              neighbourExpand
+            };
+          }
         }
       };
     }
@@ -3306,6 +3587,8 @@
   window.__vellumwidgetTest = {
     rectsIntersect,
     distToBbox,
+    distToSegment2,
+    distToGeom,
     brushKeys,
     nearestKey,
     zoomViewBox,

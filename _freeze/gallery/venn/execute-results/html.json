@@ -1,0 +1,17 @@
+{
+  "hash": "622c35eec2b76f74a2ceff30e1e646ff",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Venn diagrams that are not transparency tricks\"\ndescription: \"vvenn() computes the disjoint regions of 2 or 3 sets as real geometry with boolean path operations, so the overlaps are solid fills instead of alpha-composited circles.\"\ncategories: [Statistical]\nimage: figs/venn-3.png\n---\n\n\n\nThe usual way to draw a Venn diagram is to stack semi-transparent circles and\nlet the overlaps darken. It looks fine on screen and then betrays you: the\nregion colours are whatever alpha compositing produced rather than anything you\nchose, a region cannot be labelled by its own fill, and in PDF the transparency\nis either flattened to pixels or rendered differently by every viewer.\n\n`vvenn()` computes the regions instead. The engine's boolean path operations\n(`vellum::vl_path_op()`) intersect and subtract the circles to get each\n*disjoint* region as its own closed path, and that path is filled solid. Nothing\noverlaps, so nothing composites.\n\n\n::: {.cell}\n\n```{.r .cell-code}\nmembers <- list(\n  Coffee = c(\"Ann\", \"Bo\", \"Cy\", \"Di\", \"Ed\", \"Fi\", \"Gus\"),\n  Tea    = c(\"Bo\", \"Di\", \"Hal\", \"Ivy\", \"Jo\"),\n  Cocoa  = c(\"Cy\", \"Di\", \"Ivy\", \"Kit\", \"Lou\", \"Max\")\n)\n\np <- vvenn(members, width = 6, height = 5)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/venn-3.png){width=100%}\n:::\n:::\n\n\nEach region is labelled with how many elements fall in *exactly* that\ncombination of sets — Di is the only person in all three, so the centre reads 1\nand the pairwise regions do not count them again. That is the arithmetic a\ntransparency stack cannot show you, because the darkest patch in the middle\nstill has no number attached to it.\n\n## Two sets, and a data frame instead of lists\n\nWith two sets you get the same treatment. And if membership is already a table\nof logical columns — one column per set, which is how membership usually comes\nout of a join or a `%in%` — pass the data frame directly.\n\n\n::: {.cell}\n\n```{.r .cell-code}\npeople <- unique(unlist(members))\nmembership <- data.frame(\n  Coffee = people %in% members$Coffee,\n  Tea    = people %in% members$Tea\n)\n\np2 <- vvenn(membership, width = 6, height = 4)\n```\n:::\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](figs/venn-2.png){width=100%}\n:::\n:::\n\n\nBecause the regions are geometry and not compositing, this is one of the cases\nwhere the PDF is the *better* output rather than the lossy one: render the same\nspec with `render_plot(p, \"sets.pdf\")` and every region stays a single exact\npath at any zoom.\n\n`vvenn()` handles 2 or 3 sets. Beyond three, circles cannot represent all\ndisjoint combinations anyway, which is a fact about Venn diagrams rather than\nabout this implementation.\n",
+    "supporting": [
+      "venn_files"
+    ],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

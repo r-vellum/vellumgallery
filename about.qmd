@@ -13,27 +13,58 @@ the page.*
 
 | Package | Role | Analogue |
 |---|---|---|
-| [**vellum**](https://r-vellum.github.io/vellum/) | Low-level graphics backend: a retained scene graph, a unit/layout engine, and PNG/SVG/PDF rendering, all running in a Rust engine. | `grid` |
+| [**vellum**](https://r-vellum.github.io/vellum/) | Low-level graphics framework: units, viewports, grobs, layout, and PNG/SVG/PDF rendering, with the scene graph and renderers implemented in Rust. | `grid` |
 | [**vellumplot**](https://r-vellum.github.io/vellumplot/) | A declarative, pipe-first grammar of graphics that compiles an inspectable plot spec into a vellum scene. | `ggplot2` |
-| [**vellumwidget**](https://r-vellum.github.io/vellumwidget/) | Client-side interactive HTML widgets built from a vellum scene: hover, select, brush, and zoom, with no server. | `plotly` / `htmlwidgets` |
+| [**vellumwidget**](https://r-vellum.github.io/vellumwidget/) | Client-side interactive HTML widgets over a vellum scene: hover, select, brush, and zoom, read from the scene's own geometry. | `plotly` / `htmlwidgets` |
 | [**vellumverse**](https://r-vellum.github.io/vellumverse/) | A meta-package that installs and loads the whole ecosystem together. | `tidyverse` |
 
-## What makes it different
+## One seam
 
-vellum's scene graph, layout solver, and renderers (raster, SVG, PDF) run in
-Rust through extendr. The rendering is deterministic, so the same scene produces
-byte-identical output across platforms and graphics can be snapshot-tested. That
-one scene renders to PNG, SVG, or PDF with the same geometry and text shaping.
+The three packages are worth using together because they share a single joint.
+vellum measures text and solves layout **without opening a device**, so a
+compiled scene can report where everything landed: `scene_model()` gives one row
+per drawn element with its data key and resolved device-pixel box, and
+`element_geometry()` gives the true vertices behind that box. vellumplot
+compiles a plot spec into such a scene. vellumwidget hosts that same scene in a
+browser, reading the table rather than re-drawing anything.
 
-A vellumplot plot is a serializable spec, not a picture. Nothing is drawn until
-it compiles: encodings resolve, scales train, the panel layout is measured, and
-guides and marks become vellum grobs. The scene it produces reports itself back:
-every element keeps a data key and a resolved device-pixel bounding box.
-That is what vellumwidget reads to wire up interactivity in the browser.
+So one specification yields a static figure, a vector file, and an interactive
+widget that cannot disagree about geometry, because there is one solved layout
+behind all three.
 
-The paint model covers gradients, tiling patterns, alpha and luminance masks,
-group opacity, and blend modes. Large point clouds go through built-in
-aggregation with `datashade()`, and `sketch()` gives a hand-drawn look.
+## What that buys you
+
+Everything below needs the geometry to exist *before* the draw, which is exactly
+what a device-driven stack cannot offer:
+
+- **Read the figure back.** Ask the scene where every mark, label, and panel
+  landed — with nothing drawn.
+- **Fix text to a box.** Wrap a label to a measure and shrink it until the block
+  fits, re-wrapping at each probe; wrap long titles and long discrete axis
+  labels the same way.
+- **Move colliding labels apart in the engine.** Solved in device pixels and
+  applied as an absolute offset, so faceted, polar, and warped panels are all
+  handled in one pass.
+- **Lint a figure before anyone sees it.** Static analysis for graphics: text
+  below a legibility floor, colour contrast under the WCAG threshold, a mark
+  that will never be painted.
+- **Treat a scene as a value.** Hash it, diff it, nest one inside another. A
+  structural diff beats an image diff, because it is immune to the font stack.
+- **Ship accessible output.** Simulate colour-vision deficiency in the render,
+  encode redundantly with real hatch geometry, and emit a tagged PDF a screen
+  reader can navigate.
+
+And the things with no device-driven equivalent at all: text set along a curve,
+boolean path operations on real geometry, contours chained into polylines, SVG
+icon paths as crisp vector markers, animated SVG, multi-page PDF, and font
+pinning that makes "identical pixels everywhere" checkable rather than claimed.
+
+Rendering is deterministic, so the same scene is byte-identical across platforms
+and figures can be snapshot-tested. The paint model covers gradients, tiling
+patterns, alpha and luminance masks, group opacity, blend modes, and real
+Gaussian blur. Large point clouds go through built-in aggregation with
+`datashade()`, and `sketch()` gives a hand-drawn look that is generated in the
+engine, so it is identical on every backend.
 
 ## Pipe-first, ggplot2-adjacent
 

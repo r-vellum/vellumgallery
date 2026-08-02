@@ -1,0 +1,152 @@
+---
+title: "Linting a figure before anyone sees it"
+description: "plot_lint() reports the problems a green test suite hides — text below a legibility floor, contrast under the WCAG threshold, labels off the panel — and render_plot(cvd = ) shows you a palette failing."
+categories: [Accessibility]
+image: figs/lint-fixed.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+A plot cannot fail a test for being illegible. It renders, the file exists, the
+snapshot matches, and the 4-point axis text nobody can read ships anyway. The
+information needed to catch that is geometric — how many pixels tall is this
+glyph, what is behind that label — and it exists in the scene *before* the
+render, which is why vellum can do static analysis on a figure the way a linter
+does on code.
+
+Here is a plot with several real problems, none of which stops it rendering:
+
+```{r}
+d <- data.frame(
+  x = mtcars$wt, y = mtcars$mpg,
+  everything = "all cars"     # one level: an encoding that says nothing
+)
+note <- data.frame(x = 2.6, y = 33.5, label = "measured in 1974")
+
+bad <- vplot(d, width = 7, height = 4.4) |>
+  mark_point(x = x, y = y, color = everything, size = 2) |>
+  mark_text(x = x, y = y, label = label, size = 11, color = "#e8e8e8",
+            data = note) |>
+  labs(title = "Weight against mileage", x = "wt", y = "mpg") |>
+  theme(axis.text = element_text(size = 3.2))
+```
+
+```{r}
+#| echo: false
+vg(bad, "lint-bad")
+```
+
+`plot_lint()` compiles it and says what is wrong, most severe first:
+
+```{r}
+#| message: true
+plot_lint(bad)
+```
+
+A caption at 1.3:1 against the panel behind it, eight illegible tick labels, and a
+colour scale with one level — an encoding that carries no information and a legend
+that takes up space to say so. The result is a data frame (one row per finding:
+`rule`, `severity`, `node`, `message`), so it is as easy to assert on in a test as
+it is to read.
+
+The geometric rules — text size, contrast, overlap, off-canvas — come from the
+engine (`vellum::vl_lint()`), which judges them in resolved device pixels, so "too
+small" means too small *at this figure's size and dpi* rather than below some
+nominal point value. The grammar-level rules are added on top from the trained
+scales: a single-level encoding, or a legend too long to read.
+
+Both thresholds are arguments (`min_text_px`, `min_contrast`), so a figure headed
+for a projector can be held to a stricter floor than one for a printed page.
+
+Fix the complaints and the linter goes quiet — zero findings is the clean result:
+
+```{r}
+good <- vplot(mtcars, width = 7, height = 4.4) |>
+  mark_point(x = wt, y = mpg, color = hp, size = 2.2) |>
+  mark_text(x = x, y = y, label = label, size = 11, color = "#3a2f1e",
+            data = note) |>
+  scale_color_continuous() |>
+  labs(title = "Weight against mileage",
+       x = "weight (1000 lbs)", y = "miles per gallon", color = "hp")
+```
+
+```{r}
+#| message: true
+plot_lint(good)
+```
+
+```{r}
+#| echo: false
+vg(good, "lint-fixed")
+```
+
+## The engine's own rules
+
+Underneath, the same analysis works on a bare vellum scene, which is where the
+geometric rules are easiest to see. A watermark that will not contrast with what
+lands behind it, a mark drawn outside the page, and a label nobody could read:
+
+```{r}
+#| message: true
+library(vellum)
+
+vl_scene(4, 2, dpi = 96, bg = "white") |>
+  draw(text_grob("n = 120", x = 0.1, y = 0.9, gp = vl_gpar(fontsize = 2.5),
+                 name = "n_label")) |>
+  draw(points_grob(2.4, 0.5, name = "stray_point")) |>
+  draw(text_grob("watermark", gp = vl_gpar(fontsize = 22, col = "#F2F2F2"),
+                 name = "watermark")) |>
+  vl_lint()
+```
+
+None of those is a bug in the code that produced them. Each is a figure that
+renders, passes, and fails the reader — which is exactly the class of problem a
+linter is for.
+
+## Seeing a palette fail
+
+The linter checks a mark against its backdrop, but it will not tell you that two of
+your series are the same colour to a red-green colour-blind reader. For that,
+render through a colour-vision-deficiency simulation.
+`render_plot(cvd = )` takes `"protanopia"`, `"deuteranopia"`, `"tritanopia"`, or
+`"achromatopsia"` and applies it to the raster, so you can look at the figure the
+way that reader will.
+
+```{r}
+set.seed(4)
+series <- data.frame(
+  x = rep(1:20, 3),
+  y = c(cumsum(rnorm(20, 0.3, 1)), cumsum(rnorm(20, 0.2, 1)), cumsum(rnorm(20, 0.1, 1))),
+  series = rep(c("target", "actual", "forecast"), each = 20)
+)
+
+risky <- vplot(series, width = 6, height = 3.4) |>
+  mark_line(x = x, y = y, color = series, linewidth = 1.4) |>
+  scale_color_manual(values = c(target = "#c1121f", actual = "#4c9f38",
+                                forecast = "#7a6a53")) |>
+  labs(title = "Red, green, and brown", x = NULL, y = NULL, color = NULL)
+```
+
+```{r}
+#| echo: false
+#| layout-ncol: 2
+#| fig-cap: ["as authored", "as a deuteranope sees it"]
+dir.create("figs", showWarnings = FALSE)
+render_plot(risky, "figs/lint-cvd-normal.png", dpi = 150)
+render_plot(risky, "figs/lint-cvd-deutan.png", dpi = 150, cvd = "deuteranopia")
+knitr::include_graphics(c("figs/lint-cvd-normal.png", "figs/lint-cvd-deutan.png"))
+```
+
+Red and green are a *fine* distinction until they are not, and the simulation is
+how you find out without asking a colleague to squint. The fix is a redundant
+encoding that does not depend on hue: see
+[Hatched fills for greyscale](pattern-fills.qmd), whose `pattern_hatch()` is real
+vector geometry, so it survives greyscale printing as well as colour blindness.
+
+The three steps are meant to be used together: `plot_lint()` flags it,
+`render_plot(cvd = )` shows it, `pattern_hatch()` / `scale_pattern()` fixes it.
+And what the figure ships with is covered in
+[Alt text that ships with the plot](accessibility.qmd).

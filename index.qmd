@@ -1,6 +1,6 @@
 ---
 pagetitle: "vellum gallery"
-description: "A gallery for the vellum graphics ecosystem in R: a Rust-backed rendering backend, a pipe-first grammar of graphics, and client-side interactive widgets."
+description: "A gallery for the vellum graphics ecosystem in R: a graphics engine that solves the whole figure before drawing it, a pipe-first grammar of graphics on top, and interactive widgets that read the very same scene."
 toc: false
 page-layout: full
 ---
@@ -14,9 +14,11 @@ page-layout: full
 The parchment, the pen, and the annotation revealed on the page.
 ::::
 
-A showcase of what you can draw with the **vellum** graphics ecosystem in R:
-a Rust-backed rendering backend, a pipe-first grammar of graphics, and
-self-contained interactive HTML widgets.
+A showcase of what you can draw with the **vellum** graphics ecosystem in R.
+Its engine measures text and solves layout before anything reaches a canvas,
+so a figure is a thing you can interrogate, lint, hash, and hand to a browser
+— not just pixels. The grammar sits on top; the widget reads the same solved
+scene.
 
 [Browse the gallery](gallery/index.qmd){.btn .btn-primary .btn-lg}
 ::::
@@ -32,8 +34,9 @@ self-contained interactive HTML widgets.
 
 [the parchment]{.role}
 
-A grid-like low-level graphics system whose scene graph, layout engine, and
-PNG/SVG/PDF rendering all run in a Rust backend.
+A low-level graphics framework in the spirit of grid. Text is measured and
+layout solved with no device open, so the scene can say where every element
+landed before it is drawn.
 :::
 
 :::{.eco-card}
@@ -43,8 +46,8 @@ PNG/SVG/PDF rendering all run in a Rust backend.
 
 [the pen]{.role}
 
-A declarative, pipe-first grammar of graphics that compiles an inspectable
-plot spec into a vellum scene.
+A declarative, pipe-first grammar of graphics. A plot is an inspectable,
+serializable spec until it compiles into a vellum scene.
 :::
 
 :::{.eco-card}
@@ -54,8 +57,8 @@ plot spec into a vellum scene.
 
 [the annotation]{.role}
 
-Turns any vellum scene into a self-contained interactive HTML widget you can
-hover, select, brush, and zoom, all in the browser with no server.
+Hosts a vellum scene in the browser — hover, select, brush, zoom — reading the
+solved geometry instead of re-drawing the plot in a second engine.
 :::
 
 :::{.eco-card}

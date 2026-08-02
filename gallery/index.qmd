@@ -18,7 +18,8 @@ toc: false
 
 Each card is a self-contained example. Click through for the code and the
 rendered result. Everything is drawn by [vellumplot](https://r-vellum.github.io/vellumplot/)
-on the Rust-backed [vellum](https://r-vellum.github.io/vellum/) engine.
+on the [vellum](https://r-vellum.github.io/vellum/) engine, which solves the
+whole figure before it draws any of it.
 
 :::{#gallery-listing}
 :::

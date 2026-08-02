@@ -23,7 +23,10 @@ keyframes and `anim_save()` tweens, renders (in parallel), and encodes the frame
 — all in one pass on the Rust backend. The extension chooses the format: `.png`
 here for a full-colour, lossless animated PNG (a plot's antialiased edges need
 more than GIF's 256 colours per frame), or `.gif` for the smaller, universally
-embeddable version.
+embeddable version. There is a third option, `.svg`, which emits every frame as
+vector markup — the right answer for line art and the wrong one for 142 bubbles
+per frame, which is why this page is an APNG. See
+[An animation with no pixels in it](animated-svg.qmd) for that side of the trade.
 
 ```{r}
 library(gapminder)

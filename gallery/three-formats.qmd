@@ -1,6 +1,6 @@
 ---
 title: "One scene, three formats"
-description: "The same vellum scene rendered to PNG, SVG, and PDF, with identical geometry from one Rust-backed backend."
+description: "The same vellum scene rendered to PNG, SVG, and PDF. Layout is solved once and each backend walks that one answer, rather than re-solving against its own metrics."
 categories: [Backend]
 image: figs/three-formats.png
 ---
@@ -11,9 +11,12 @@ suppressMessages(library(vellum))
 ```
 
 This is the layer beneath the grammar. A **vellum** scene is described once with
-low-level grobs, then compiled and rendered by the Rust backend. The *same*
-scene renders to a raster (PNG), a vector (SVG), or a print-ready document (PDF)
-with consistent geometry and text shaping, and no per-format fiddling.
+low-level grobs, then compiled: text measured, layout solved, every position
+resolved. Each backend then *walks that one solved scene* instead of re-solving
+the layout against its own font metrics, so a raster (PNG), a vector (SVG), and
+a print-ready document (PDF) agree on geometry rather than merely resembling
+each other. Where a backend cannot honour something, it says so instead of
+silently dropping it.
 
 ```{r}
 scene <- vl_scene(width = 6, height = 3, bg = "#faf5ea") |>
