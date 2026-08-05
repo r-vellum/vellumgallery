@@ -1,0 +1,114 @@
+---
+title: "A bar chart race, with no new API"
+description: "transition_states() over a rank column turns mark_bar() into a bar chart race: bars keyed by category slide past each other as their ranks change, on frozen scales."
+categories: [Animation]
+image: figs/bar-race-poster.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+A bar chart race is a ranking that reorders itself over time. There is no
+`mark_race()`: it falls out of `mark_bar()`, `coord_flip()` and
+`transition_states()`, because the tween engine keys each bar to its category and
+interpolates position as well as length. When two categories swap rank, their bars
+slide past each other.
+
+The one thing the data has to carry is the rank. Bar position comes from the `x`
+encoding, so ranking within each year and mapping `x = rank` is what makes bars move;
+map `x = country` instead and you get twelve years of bars growing in place.
+
+```{r}
+library(gapminder)
+
+g <- transform(as.data.frame(gapminder), gdp = pop * gdpPercap / 1e9)
+biggest <- head(g[g$year == 2007, ][order(-g$gdp[g$year == 2007]), "country"], 10)
+
+d <- g[g$country %in% biggest, c("country", "year", "gdp")]
+d$country <- droplevels(factor(d$country))
+d <- do.call(rbind, lapply(split(d, d$year), function(s) {
+  s$rank <- rank(s$gdp, ties.method = "first")
+  s
+}))
+
+# Where the year stamp sits, in data units.
+d$stamp_x <- 2
+d$stamp_y <- 12000
+
+head(d[d$year == 1952, ], 3)
+```
+
+Ten countries, twelve five-year steps, and a rank from 1 (smallest) to 10 (largest)
+recomputed inside each year.
+
+```{r}
+a <- vplot(d, width = 7, height = 4.5, dpi = 150) |>
+  mark_bar(x = rank, y = gdp, fill = country) |>
+  mark_text(x = rank, y = gdp, label = country, hjust = 0, size = 3.6) |>
+  mark_text(x = stamp_x, y = stamp_y, label = year, size = 13, color = "grey70") |>
+  coord_flip() |>
+  guides(fill = "none") |>
+  scale_y_continuous(limits = c(0, 16000)) |>
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
+  transition_states(year, transition_length = 1, state_length = 2) |>
+  labs(title = "Total GDP, the ten largest economies of 2007",
+       x = "", y = "billions of 1990 dollars") |>
+  animate(nframes = 72, fps = 14)
+```
+
+```{r}
+#| echo: false
+vg_anim(a, "bar-race", ext = "gif")
+```
+
+```{r}
+#| include: false
+# A still of the last state, for the listing card.
+last <- d[d$year == 2007, ]
+poster <- vplot(last, width = 7, height = 4.5, dpi = 150) |>
+  mark_bar(x = rank, y = gdp, fill = country) |>
+  mark_text(x = rank, y = gdp, label = country, hjust = 0, size = 3.6) |>
+  mark_text(x = stamp_x, y = stamp_y, label = year, size = 13, color = "grey70") |>
+  coord_flip() |>
+  guides(fill = "none") |>
+  scale_y_continuous(limits = c(0, 16000)) |>
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
+  labs(title = "Total GDP, the ten largest economies of 2007",
+       x = "", y = "billions of 1990 dollars")
+render_plot(poster, "figs/bar-race-poster.png", dpi = 150)
+```
+
+China starts seventh of the ten and takes second place off Japan in 2002. Japan had
+climbed to second in 1972 and held it through five steps. India sits eighth as late as
+1997, then passes the United Kingdom, France and Germany to reach fourth by 2007. The
+United States never moves. Labels ride their bars, so you can follow one country through
+the reshuffling instead of re-reading the axis every time the order changes.
+
+## What the engine is doing
+
+Bars interpolate on two channels at once. Length follows `gdp`, and position follows
+`rank`, so a country whose rank changes by one slides one slot while its bar grows. The
+scales were trained once across all twelve years and frozen, which is why the axis never
+jumps: 1952 is drawn against the same 16000-billion axis as 2007, and the growth is
+legible as growth rather than as a rescaling.
+
+`transition_length` and `state_length` set the rhythm. The 1:2 ratio here holds each
+year twice as long as the slide into it, which leaves the ranking readable at rest and
+still shows the overtakes. Setting `state_length = 0` gives constant motion with nothing
+to read.
+
+## Two things worth knowing
+
+The year stamp is a `mark_text()` on the *plot* data, with its position in two constant
+columns. That is deliberate. A layer with its own `data =` argument is not filtered per
+keyframe, so a twelve-row stamp table draws all twelve years on top of each other in
+every frame, which looks like a rendering bug and is not one.
+
+The output is a GIF, which is the right choice here and the wrong one for
+[the Gapminder bubbles](gapminder.qmd). GIF allows 256 colours per frame; this animation
+uses ten flat fills, a grey panel and some text, so nothing is lost, and the file stays
+small enough to sit in a page. Antialiased bubbles over a smooth colour ramp are the
+opposite case, and that page uses an APNG. The third option, `.svg`, is in
+[An animation with no pixels in it](animated-svg.qmd).
