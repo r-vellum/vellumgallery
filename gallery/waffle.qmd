@@ -1,0 +1,129 @@
+---
+title: "Waffle charts, counted rather than eyeballed"
+description: "vwaffle() spends a grid of 100 cells on category shares with largest-remainder allocation, so the cells always sum to the grid and a share can be read by counting squares."
+categories: [Basics]
+image: figs/waffle.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+Judging the angle of a pie slice is a skill nobody has. Counting squares is one
+everybody has. A waffle spends a fixed grid, 100 cells by default, on the categories in
+proportion to their size, and reading a share off it is arithmetic rather than
+estimation.
+
+`vwaffle()` is a standalone chart in the same family as `vsankey()` and `vvenn()`: hand
+it a data frame, the column that colours the cells, and an optional weight. It returns a
+`PlotSpec` with no axes and a category legend.
+
+```{r}
+titanic <- as.data.frame(datasets::Titanic)
+aboard <- aggregate(Freq ~ Class, titanic, sum)
+aboard
+
+p <- vwaffle(aboard, category = Class, value = Freq, width = 5.5, height = 4.4) |>
+  labs(title = "Everyone aboard the Titanic (2201 people)")
+```
+
+```{r}
+#| echo: false
+vg(p, "waffle")
+```
+
+Cells fill column by column from the bottom left, so a full column is a tenth of
+everyone aboard. Crew take four columns, third class a shade over three, and first and
+second class together do not fill three.
+
+Now the same grid for the 711 people who survived:
+
+```{r}
+survived <- aggregate(Freq ~ Class, subset(titanic, Survived == "Yes"), sum)
+
+p2 <- vwaffle(survived, category = Class, value = Freq, width = 5.5, height = 4.4) |>
+  labs(title = "The 711 who survived")
+```
+
+```{r}
+#| echo: false
+vg(p2, "waffle-survivors")
+```
+
+First class goes from 15 cells to 28 and crew from 40 down to 30. The two grids are the
+same size, so those numbers are directly comparable, which is the thing a pair of pies
+makes hard: your eye has to hold one set of angles while it reads another.
+
+## The cells always sum to the grid
+
+Rounding each share independently does not add up. The survivor shares are 28.6, 16.6,
+25.0 and 29.8 percent, and rounding those gives 101 cells for a 100-cell grid:
+
+```{r}
+shares <- 100 * survived$Freq / sum(survived$Freq)
+round(shares)
+sum(round(shares))
+```
+
+`vwaffle()` allocates by largest remainder instead: floor every share, then hand the
+leftover cells to the categories the floor cut deepest. The floors here come to 98, and
+the two spare cells go to crew (remainder 0.8) and then to second class, which tied with
+first class at 0.6 and won the tie. `provenance_join()` reports what got drawn:
+
+```{r}
+cells <- provenance_join(p2)
+data.frame(class = levels(survived$Class), cells = cells$n_rows)
+sum(cells$n_rows)
+```
+
+Three equal categories work out the same way, 34 and 33 and 33 rather than three 33s and
+a hole in the corner:
+
+```{r}
+thirds <- data.frame(g = c("a", "b", "c"), n = c(1, 1, 1))
+provenance_join(vwaffle(thirds, category = g, value = n))$n_rows
+```
+
+## Grid shape, and counting rows instead of weights
+
+`n_cells` and `rows` set the resolution, and `flip` fills left to right along each row
+instead of bottom to top along each column. Twenty-five cells in five rows is one cell
+per four people in a hundred, which is as coarse as this data can go and still separate
+first from second class:
+
+```{r}
+p3 <- vwaffle(aboard, category = Class, value = Freq, n_cells = 25, rows = 5,
+              flip = TRUE, width = 5, height = 4) |>
+  labs(title = "One cell per 4%")
+```
+
+```{r}
+#| echo: false
+vg(p3, "waffle-50")
+```
+
+Leave `value` out and each row of the data counts once, so an un-aggregated table works
+directly:
+
+```{r}
+peng <- na.omit(datasets::penguins)
+p4 <- vwaffle(peng, category = species, rows = 10, width = 5.5, height = 4.4) |>
+  theme_sketch() |>
+  theme(panel.background = element_blank(), panel.grid = element_blank(),
+        axis.text = element_blank(), axis.title = element_blank(),
+        axis.ticks = element_blank(), axis.line = element_blank()) |>
+  labs(title = "333 penguins, by species")
+```
+
+```{r}
+#| echo: false
+vg(p4, "waffle-sketch")
+```
+
+Under `theme_sketch()` the cells get drawn as hachured squares, which suits a chart
+whose point is that a cell is a rounded-off approximation of a share. The extra
+`theme()` call is there because `theme_sketch()` is a *complete* theme and replaces the
+axis-free one `vwaffle()` sets up, so the blank axis elements have to be asked for
+again. For the angular reading of the same kind of data, see
+[Pie and donut](pie-donut.qmd).
