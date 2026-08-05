@@ -33,9 +33,8 @@ d <- do.call(rbind, lapply(split(d, d$year), function(s) {
   s
 }))
 
-# Where the year stamp sits, in data units.
-d$stamp_x <- 2
-d$stamp_y <- 12000
+# One row per state, for the year stamp.
+stamp <- data.frame(year = sort(unique(d$year)), rank = 2, gdp = 12000)
 
 head(d[d$year == 1952, ], 3)
 ```
@@ -47,14 +46,14 @@ recomputed inside each year.
 a <- vplot(d, width = 7, height = 4.5, dpi = 150) |>
   mark_bar(x = rank, y = gdp, fill = country) |>
   mark_text(x = rank, y = gdp, label = country, hjust = 0, size = 3.6) |>
-  mark_text(x = stamp_x, y = stamp_y, label = year, size = 13, color = "grey70") |>
+  mark_text(x = rank, y = gdp, label = year, data = stamp, size = 13, color = "grey70") |>
   coord_flip() |>
   guides(fill = "none") |>
   scale_y_continuous(limits = c(0, 16000)) |>
   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
   transition_states(year, transition_length = 1, state_length = 2) |>
   labs(title = "Total GDP, the ten largest economies of 2007",
-       x = "", y = "billions of 1990 dollars") |>
+       x = NULL, y = "billions of 1990 dollars") |>
   animate(nframes = 72, fps = 14)
 ```
 
@@ -70,13 +69,14 @@ last <- d[d$year == 2007, ]
 poster <- vplot(last, width = 7, height = 4.5, dpi = 150) |>
   mark_bar(x = rank, y = gdp, fill = country) |>
   mark_text(x = rank, y = gdp, label = country, hjust = 0, size = 3.6) |>
-  mark_text(x = stamp_x, y = stamp_y, label = year, size = 13, color = "grey70") |>
+  mark_text(x = rank, y = gdp, label = year, data = stamp[stamp$year == 2007, ],
+            size = 13, color = "grey70") |>
   coord_flip() |>
   guides(fill = "none") |>
   scale_y_continuous(limits = c(0, 16000)) |>
   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
   labs(title = "Total GDP, the ten largest economies of 2007",
-       x = "", y = "billions of 1990 dollars")
+       x = NULL, y = "billions of 1990 dollars")
 render_plot(poster, "figs/bar-race-poster.png", dpi = 150)
 ```
 
@@ -99,12 +99,13 @@ year twice as long as the slide into it, which leaves the ranking readable at re
 still shows the overtakes. Setting `state_length = 0` gives constant motion with nothing
 to read.
 
-## Two things worth knowing
+The year stamp is a `mark_text()` layer over its own twelve-row table, one row per state.
+A layer's own `data =` is filtered to the current keyframe whenever it carries the state
+column, so each frame stamps one year; a layer whose data has no `year` column would
+instead persist unchanged through the whole animation, which is what you want for a
+caption or a reference line.
 
-The year stamp is a `mark_text()` on the *plot* data, with its position in two constant
-columns. That is deliberate. A layer with its own `data =` argument is not filtered per
-keyframe, so a twelve-row stamp table draws all twelve years on top of each other in
-every frame, which looks like a rendering bug and is not one.
+## GIF, for once
 
 The output is a GIF, which is the right choice here and the wrong one for
 [the Gapminder bubbles](gapminder.qmd). GIF allows 256 colours per frame; this animation

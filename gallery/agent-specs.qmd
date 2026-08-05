@@ -86,23 +86,46 @@ claude mcp add vellumplot -- Rscript -e 'vellumplot::mcp_serve()'
 ```
 
 Nothing about it is specific to a client, and the protocol is plain enough to speak by
-hand. Here is one `render_spec` call, sent to the server as a process and read back:
+hand. Start one server, hand it a handshake and three tool calls on stdin, and read the
+replies back off stdout:
 
 ```{r}
 csv <- file.path(tempdir(), "penguins.csv")
 write.csv(peng, csv, row.names = FALSE)
 
-ask <- function(name, arguments) {
-  req <- list(jsonrpc = "2.0", id = 1L, method = "tools/call",
-              params = list(name = name, arguments = arguments))
-  out <- system2("Rscript", c("-e", shQuote("vellumplot::mcp_serve()")),
-                 input = jsonlite::toJSON(req, auto_unbox = TRUE), stdout = TRUE)
-  jsonlite::fromJSON(out, simplifyVector = FALSE)$result
+req <- function(id, method, params = list()) {
+  jsonlite::toJSON(list(jsonrpc = "2.0", id = id, method = method, params = params),
+                   auto_unbox = TRUE)
+}
+call <- function(id, name, arguments) {
+  req(id, "tools/call", list(name = name, arguments = arguments))
 }
 
-res <- ask("render_spec", list(spec = spec, data_path = csv,
-                               out_path = "figs/agent-specs-mcp.png"))
-cat(res$content[[1]]$text)
+session <- c(
+  req(1, "initialize"),
+  req(2, "tools/list"),
+  call(3, "list_fields", list(data_path = csv)),
+  call(4, "render_spec", list(spec = spec, data_path = csv,
+                              out_path = "figs/agent-specs-mcp.png")),
+  call(5, "render_spec", list(spec = sub("body_mass", "mass", spec, fixed = TRUE),
+                              data_path = csv))
+)
+
+out <- system2("Rscript", c("-e", shQuote("vellumplot::mcp_serve()")),
+               input = session, stdout = TRUE)
+replies <- lapply(out, jsonlite::fromJSON, simplifyVector = FALSE)
+
+length(replies)
+replies[[1]]$result$serverInfo
+vapply(replies[[2]]$result$tools, `[[`, character(1), "name")
+```
+
+Five requests, five replies, one process. Request 3 is `list_fields`, which hands back
+the same table `spec_fields()` printed above, this time as JSON. Request 4 renders, and
+reports where it put the file:
+
+```{r}
+cat(replies[[4]]$result$content[[1]]$text)
 ```
 
 ```{r}
@@ -111,22 +134,16 @@ knitr::include_graphics("figs/agent-specs-mcp.png")
 ```
 
 That figure came out of the server, not out of this page. The agent never saw R code
-and the host never ran any. A spec the model got wrong comes back the same shape as the
-error above, flagged as a tool error so the client knows to repair rather than report:
+and the host never ran any. The fifth request is the same spec with one field renamed,
+and it comes back the same shape as the error above, flagged as a tool error so the
+client knows to repair rather than report:
 
 ```{r}
-res <- ask("render_spec", list(spec = sub("body_mass", "mass", spec, fixed = TRUE),
-                               data_path = csv))
-res$isError
-cat(res$content[[1]]$text)
+replies[[5]]$result$isError
+cat(replies[[5]]$result$content[[1]]$text)
 ```
 
 That `hint` is what turns a retry into a fix instead of another guess.
-
-::: {.callout-note appearance="simple"}
-Each exchange above is its own `Rscript` process. A long-lived client keeps the pipe
-open and reuses the session.
-:::
 
 ## Which rows drew this element
 

@@ -110,9 +110,6 @@ directly:
 peng <- na.omit(datasets::penguins)
 p4 <- vwaffle(peng, category = species, rows = 10, width = 5.5, height = 4.4) |>
   theme_sketch() |>
-  theme(panel.background = element_blank(), panel.grid = element_blank(),
-        axis.text = element_blank(), axis.title = element_blank(),
-        axis.ticks = element_blank(), axis.line = element_blank()) |>
   labs(title = "333 penguins, by species")
 ```
 
@@ -122,8 +119,7 @@ vg(p4, "waffle-sketch")
 ```
 
 Under `theme_sketch()` the cells get drawn as hachured squares, which suits a chart
-whose point is that a cell is a rounded-off approximation of a share. The extra
-`theme()` call is there because `theme_sketch()` is a *complete* theme and replaces the
-axis-free one `vwaffle()` sets up, so the blank axis elements have to be asked for
-again. For the angular reading of the same kind of data, see
-[Pie and donut](pie-donut.qmd).
+whose point is that a cell is a rounded-off approximation of a share. `theme_sketch()`
+sketches the theme the chart already has rather than replacing it, so the waffle keeps
+its bare panel and no axes come back. For the angular reading of the same kind of data,
+see [Pie and donut](pie-donut.qmd).
