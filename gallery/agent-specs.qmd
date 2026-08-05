@@ -1,0 +1,153 @@
+---
+title: "A chart an agent writes as data, not as code"
+description: "spec_fields() grounds a model in the real columns, vplot_from_spec() validates what it produces and reports the mistake as a record, mcp_serve() exposes both to an MCP client, and provenance_join() says which rows drew each element."
+categories: [Backend]
+image: figs/agent-specs.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+dir.create("figs", showWarnings = FALSE)
+```
+
+Ask a language model for a plot and you normally get R code, which you then have to
+run. Executing generated code is the part nobody wants to defend, and the failure
+mode is bad: the model invents a column name, the script throws, and you get a
+traceback written for a human debugging their own typo.
+
+Because a vellumplot plot [is a spec](spec-as-data.qmd), the model can produce the
+*document* instead. Nothing is executed. Three functions cover the loop: one to tell
+the model what the data actually contains, one to check what came back, and one to
+serve both over the Model Context Protocol.
+
+## Telling the model what the columns are
+
+`spec_fields()` is the grounding step. One row per column, with the encoding type a
+spec would use, how many distinct values it has, and a few real ones:
+
+```{r}
+peng <- na.omit(datasets::penguins)
+spec_fields(peng)
+```
+
+Hallucinated field names mostly come from the model guessing at a schema it was never
+shown. Hand it this table first and the guessing stops.
+
+## Compiling what it wrote
+
+A spec is JSON, so this is the whole payload for a coloured scatter:
+
+```{r}
+spec <- '{
+  "version": "1",
+  "width": 6.5, "height": 4, "dpi": 150,
+  "data": {"name": "penguins"},
+  "layers": [
+    {"mark": "point",
+     "encoding": {
+       "x": {"field": "flipper_len", "type": "quantitative"},
+       "y": {"field": "body_mass", "type": "quantitative"},
+       "color": {"field": "species", "type": "nominal"}}}
+  ],
+  "labels": {"title": "Flipper length against body mass",
+             "x": "flipper length (mm)", "y": "body mass (g)",
+             "color": "species"}
+}'
+
+p <- vplot_from_spec(spec, data = peng)
+```
+
+```{r}
+#| echo: false
+vg(p, "agent-specs")
+```
+
+`vplot_from_spec()` validates every referenced field against the data and dry-runs the
+compile before handing back a `PlotSpec`. Get a name wrong and the error is a record
+rather than a stack trace: which field, what was expected, what exists.
+
+```{r}
+#| error: true
+vplot_from_spec(sub("flipper_len", "flipper_length", spec, fixed = TRUE), data = peng)
+```
+
+`spec_diagnose()` is the same check without the throw, for a caller that would rather
+branch on `$ok` and retry.
+
+## Over MCP
+
+`mcp_serve()` puts that behind three tools: `get_schema`, `list_fields`, and
+`render_spec`. It speaks newline-delimited JSON-RPC 2.0 on stdio, in pure R, so
+registering it takes one line:
+
+```sh
+claude mcp add vellumplot -- Rscript -e 'vellumplot::mcp_serve()'
+```
+
+Nothing about it is specific to a client, and the protocol is plain enough to speak by
+hand. Here is one `render_spec` call, sent to the server as a process and read back:
+
+```{r}
+csv <- file.path(tempdir(), "penguins.csv")
+write.csv(peng, csv, row.names = FALSE)
+
+ask <- function(name, arguments) {
+  req <- list(jsonrpc = "2.0", id = 1L, method = "tools/call",
+              params = list(name = name, arguments = arguments))
+  out <- system2("Rscript", c("-e", shQuote("vellumplot::mcp_serve()")),
+                 input = jsonlite::toJSON(req, auto_unbox = TRUE), stdout = TRUE)
+  jsonlite::fromJSON(out, simplifyVector = FALSE)$result
+}
+
+res <- ask("render_spec", list(spec = spec, data_path = csv,
+                               out_path = "figs/agent-specs-mcp.png"))
+cat(res$content[[1]]$text)
+```
+
+```{r}
+#| echo: false
+knitr::include_graphics("figs/agent-specs-mcp.png")
+```
+
+That figure came out of the server, not out of this page. The agent never saw R code
+and the host never ran any. A spec the model got wrong comes back the same shape as the
+error above, flagged as a tool error so the client knows to repair rather than report:
+
+```{r}
+res <- ask("render_spec", list(spec = sub("body_mass", "mass", spec, fixed = TRUE),
+                               data_path = csv))
+res$isError
+cat(res$content[[1]]$text)
+```
+
+That `hint` is what turns a retry into a fix instead of another guess.
+
+::: {.callout-note appearance="simple"}
+Each exchange above is its own `Rscript` process. A long-lived client keeps the pipe
+open and reuses the session.
+:::
+
+## Which rows drew this element
+
+The other half of an agent's problem is reading a figure back. `provenance_join()`
+compiles the plot once and returns one row per drawn element, carrying both the source
+rows that produced it and where it landed in device pixels:
+
+```{r}
+pj <- provenance_join(p)
+pj[, c("id", "layer", "mark", "x", "y", "w", "h", "n_rows")]
+```
+
+The scatter draws as three grobs, one per species, so each row here covers a whole
+group and its bounding box. `rows` is a list column of indices back into the data:
+
+```{r}
+head(peng[pj$rows[[3]], c("species", "flipper_len", "body_mass")], 4)
+```
+
+Given a pixel, the boxes say which element was hit and the indices say what it means,
+which is the substrate under linked views and click-to-source. It is also how a figure
+gets audited, since every element can name the data behind it. The hashing side of the
+same idea is in
+[A figure that carries its own provenance](provenance.qmd).
