@@ -11,9 +11,12 @@ permissions:
   pages: write
   id-token: write
 
+# Let a running deploy finish instead of aborting it: publishing this site's
+# ~100 MiB artifact takes several minutes, and cancelling mid-publish leaves the
+# Pages service busy, which makes the next run wait even longer.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -46,6 +49,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # The default timeout is 10 minutes, which the ~100 MiB artifact (the
+      # gallery's full-resolution figures) no longer publishes inside: the
+      # deployment sits in `deployment_in_progress` and the action aborts a
+      # deployment that would have succeeded. Wait half an hour instead.
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 1800000
+          error_count: 20
