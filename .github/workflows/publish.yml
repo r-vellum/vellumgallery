@@ -49,13 +49,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # The default timeout is 10 minutes, which the ~100 MiB artifact (the
-      # gallery's full-resolution figures) no longer publishes inside: the
-      # deployment sits in `deployment_in_progress` and the action aborts a
-      # deployment that would have succeeded. Wait half an hour instead.
+      # deploy-pages gives up after 10 minutes and clamps any longer `timeout`
+      # to that maximum, so the artifact has to publish inside it. Keep the
+      # site's figures down: at ~100 MiB the deployment finished a few seconds
+      # after the action had already aborted it. Figures are displayed at a
+      # 950px body width, so 1900px wide is the useful ceiling for one.
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          timeout: 1800000
-          error_count: 20
