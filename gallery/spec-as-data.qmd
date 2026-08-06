@@ -89,17 +89,33 @@ raising a classed error that carries the same diagnostics.
 ## Handing it to another grammar
 
 Vega-Lite is also a layered grammar of graphics, so most of a spec maps across
-directly:
+directly. This plot does not translate cleanly, and the export says so:
 
 ```{r}
+#| warning: true
 vl <- spec_to_vegalite(p)
 vl$mark
-str(vl$encoding, max.level = 2)
 ```
 
-The same principle holds at the boundary: what the bridge cannot express is
-*reported* rather than silently changed. A polar plot has no Vega-Lite equivalent, so
-the translation says which features it dropped:
+A Vega-Lite `field` is a column name, and `color = factor(cyl)` is an R expression
+evaluated at compile time, so there is nothing on the other side to point the channel
+at. Materialise the expression as a column and the same export goes through without a
+word:
+
+```{r}
+#| warning: true
+cars <- transform(mtcars, cyl = factor(cyl))
+
+vl2 <- vplot(cars, width = 6.5, height = 4) |>
+  mark_point(x = wt, y = mpg, color = cyl, size = 2.4) |>
+  spec_to_vegalite()
+
+str(vl2$encoding, max.level = 2)
+```
+
+That is the rule at this boundary too: what the bridge cannot express is *reported*
+rather than quietly dropped. Some things have no equivalent at all to materialise. A
+polar coordinate system is one:
 
 ```{r}
 #| warning: true
