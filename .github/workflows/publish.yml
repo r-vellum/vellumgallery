@@ -37,6 +37,11 @@ jobs:
         with:
           to: html
 
+      # A fingerprint the deploy job can look for on the live site, so "did this
+      # commit actually publish?" is a question with an answer.
+      - name: Stamp the build
+        run: echo "${{ github.sha }}" > _site/build-sha.txt
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -49,11 +54,29 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # deploy-pages gives up after 10 minutes and clamps any longer `timeout`
-      # to that maximum, so the artifact has to publish inside it. Keep the
-      # site's figures down: at ~100 MiB the deployment finished a few seconds
-      # after the action had already aborted it. Figures are displayed at a
-      # 950px body width, so 1900px wide is the useful ceiling for one.
+      # deploy-pages stops polling after 10 minutes and clamps any longer
+      # `timeout` to that maximum ("timeout set to the maximum of 600000
+      # milliseconds"), then reports failure. Publishing this site has been
+      # taking 7 to 11 minutes, so that verdict is unreliable: deployments have
+      # landed a minute after the action gave up on them. Let the step report
+      # what it likes and settle the question below.
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4
+
+      - name: Confirm the commit is live
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          url="${{ steps.deployment.outputs.page_url || 'https://r-vellum.github.io/vellumgallery/' }}build-sha.txt"
+          echo "deploy-pages gave up; polling $url for ${{ github.sha }}"
+          for i in $(seq 1 40); do
+            live=$(curl -fsSL -H 'Cache-Control: no-cache' "$url" 2>/dev/null | tr -d '[:space:]')
+            if [ "$live" = "${{ github.sha }}" ]; then
+              echo "Published after the action stopped waiting (poll $i)."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::Site still does not serve ${{ github.sha }} 20 minutes after deploy-pages timed out."
+          exit 1
