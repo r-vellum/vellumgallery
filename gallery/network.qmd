@@ -15,6 +15,7 @@ attributes mapped to size and fill.
 
 ```{r}
 g <- igraph::make_graph("Zachary")
+set.seed(1) # Louvain is randomised; fix it so re-renders keep the same communities
 g <- igraph::set_vertex_attr(
   g, "grp",
   value = as.factor(igraph::cluster_louvain(g)$membership)

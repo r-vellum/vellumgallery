@@ -550,23 +550,30 @@
       });
     }
     const closed = g.kind === "polygon" || g.kind === "path";
-    if (closed && n >= 3) {
-      let inside = false;
-      for (let i = 0, j = n - 1; i < n; j = i++) {
-        const xi = gx[at + i], yi = gy[at + i];
-        const xj = gx[at + j], yj = gy[at + j];
-        if (yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
-      }
-      if (inside) return 0;
-    }
+    const rings = g.rings || [n];
     let best = Infinity;
-    for (let i = 1; i < n; i++) {
-      const d2 = distToSegment2(x, y, gx[at + i - 1], gy[at + i - 1], gx[at + i], gy[at + i]);
-      if (d2 < best) best = d2;
-    }
-    if (closed && n >= 3) {
-      const d2 = distToSegment2(x, y, gx[at + n - 1], gy[at + n - 1], gx[at], gy[at]);
-      if (d2 < best) best = d2;
+    let ra = at;
+    for (let r = 0; r < rings.length; r++) {
+      const rn = rings[r] | 0;
+      if (rn <= 0) continue;
+      if (closed && rn >= 3) {
+        let inside = false;
+        for (let i = 0, j = rn - 1; i < rn; j = i++) {
+          const xi = gx[ra + i], yi = gy[ra + i];
+          const xj = gx[ra + j], yj = gy[ra + j];
+          if (yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+        }
+        if (inside) return 0;
+      }
+      for (let i = 1; i < rn; i++) {
+        const d2 = distToSegment2(x, y, gx[ra + i - 1], gy[ra + i - 1], gx[ra + i], gy[ra + i]);
+        if (d2 < best) best = d2;
+      }
+      if (closed && rn >= 3) {
+        const d2 = distToSegment2(x, y, gx[ra + rn - 1], gy[ra + rn - 1], gx[ra], gy[ra]);
+        if (d2 < best) best = d2;
+      }
+      ra += rn;
     }
     return Math.sqrt(best);
   }
@@ -1361,11 +1368,23 @@
         if (!keys.length || xs.length !== ys.length) return;
         gx = Float64Array.from(xs);
         gy = Float64Array.from(ys);
-        let at = 0;
+        const nrs = g.nr != null ? asColumn(g.nr) : null;
+        const rls = g.rl != null ? asColumn(g.rl) : null;
+        let at = 0, ra = 0;
         for (let i = 0; i < keys.length; i++) {
           const n = ns[i] | 0;
           if (n <= 0 || at + n > gx.length) break;
-          (geomByKey[keys[i]] || (geomByKey[keys[i]] = [])).push({ kind: kinds[i], at, n });
+          const rec = { kind: kinds[i], at, n };
+          if (nrs && rls) {
+            const k = nrs[i] | 0;
+            if (k > 1) {
+              const lens = [];
+              for (let j = 0; j < k; j++) lens.push(rls[ra + j] | 0);
+              rec.rings = lens;
+            }
+            ra += k > 0 ? k : 1;
+          }
+          (geomByKey[keys[i]] || (geomByKey[keys[i]] = [])).push(rec);
           at += n;
         }
         haveGeometry = at > 0;
@@ -2221,12 +2240,40 @@
             if (glyph) {
               node.style.setProperty("transform-box", "fill-box");
               node.style.setProperty("transform-origin", "center");
-              node.style.setProperty("transform", "scale(var(--vw-ix,1),var(--vw-iy,1))");
+              const place = transAsCss(node);
+              node.style.setProperty(
+                "transform",
+                (place ? place + " " : "") + "scale(var(--vw-ix,1),var(--vw-iy,1))"
+              );
             } else {
               node.setAttribute("vector-effect", "non-scaling-stroke");
             }
           }
         }
+      }
+      function transAsCss(node) {
+        const t = (node.getAttribute("transform") || "").trim();
+        if (!t) return "";
+        const N = "([-+\\d.eE]+)";
+        const m = new RegExp(
+          "matrix\\(\\s*" + [N, N, N, N, N, N].join("[\\s,]+") + "\\s*\\)"
+        ).exec(t);
+        if (m) {
+          const v = m.slice(1, 7).map(Number);
+          if (v.some(function(x) {
+            return !isFinite(x);
+          })) return "";
+          return "matrix(" + v.join(",") + ")";
+        }
+        const tr = new RegExp(
+          "translate\\(\\s*" + N + "(?:[\\s,]+" + N + ")?\\s*\\)"
+        ).exec(t);
+        if (tr) {
+          const tx = Number(tr[1]), ty = tr[2] === void 0 ? 0 : Number(tr[2]);
+          if (!isFinite(tx) || !isFinite(ty)) return "";
+          return "translate(" + tx + "px," + ty + "px)";
+        }
+        return "";
       }
       function transTranslate(node) {
         const t = node.getAttribute("transform") || "";
@@ -2821,21 +2868,42 @@
         }
       }
       function showSourcePopover(node, values) {
+        var _a;
         hideSourcePopover();
         const fields = provenance.fields;
-        const head = "<tr>" + fields.map((f) => "<th>" + stripTags(f) + "</th>").join("") + "</tr>";
-        const body = values.slice(0, 12).map(
-          (row) => "<tr>" + fields.map((f) => {
-            var _a;
-            return "<td>" + stripTags(String((_a = row[f]) != null ? _a : "")) + "</td>";
-          }).join("") + "</tr>"
-        ).join("");
-        const extra = values.length > 12 ? "<div class='vw-src-more'>+" + (values.length - 12) + " more</div>" : "";
         const pop = document.createElement("div");
         pop.className = "vellumwidget-source";
         pop.setAttribute("role", "dialog");
         pop.style.cssText = "position:absolute;z-index:20;max-height:220px;overflow:auto;background:var(--vw-bg,#fff);color:var(--vw-fg,#111);border:1px solid rgba(0,0,0,.2);border-radius:6px;padding:6px 8px;font:11px/1.4 system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.18);max-width:320px;";
-        pop.innerHTML = "<table style='border-collapse:collapse'><thead>" + head + "</thead><tbody>" + body + "</tbody></table>" + extra;
+        const table = document.createElement("table");
+        table.style.borderCollapse = "collapse";
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        for (const f of fields) {
+          const th = document.createElement("th");
+          th.textContent = String(f);
+          headRow.appendChild(th);
+        }
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        const tbody = document.createElement("tbody");
+        for (const row of values.slice(0, 12)) {
+          const tr = document.createElement("tr");
+          for (const f of fields) {
+            const td = document.createElement("td");
+            td.textContent = String((_a = row[f]) != null ? _a : "");
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        pop.appendChild(table);
+        if (values.length > 12) {
+          const more = document.createElement("div");
+          more.className = "vw-src-more";
+          more.textContent = "+" + (values.length - 12) + " more";
+          pop.appendChild(more);
+        }
         const nb = node.getBoundingClientRect();
         const cb = el.getBoundingClientRect();
         pop.style.left = Math.min(nb.left - cb.left + 8, Math.max(0, cb.width - 220)) + "px";
