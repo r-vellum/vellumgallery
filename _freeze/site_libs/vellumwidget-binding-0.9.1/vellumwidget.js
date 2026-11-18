@@ -549,21 +549,27 @@
         y1: Math.max(gy[at], gy[at + 1])
       });
     }
-    const closed = g.kind === "polygon" || g.kind === "path";
+    const closed = g.kind === "polygon" || g.kind === "path" || g.kind === "hexagon" || g.kind === "sector";
     const rings = g.rings || [n];
     let best = Infinity;
+    let cross = 0;
+    let wind = 0;
     let ra = at;
     for (let r = 0; r < rings.length; r++) {
       const rn = rings[r] | 0;
       if (rn <= 0) continue;
       if (closed && rn >= 3) {
-        let inside = false;
         for (let i = 0, j = rn - 1; i < rn; j = i++) {
           const xi = gx[ra + i], yi = gy[ra + i];
           const xj = gx[ra + j], yj = gy[ra + j];
-          if (yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+          if (yi > y !== yj > y) {
+            if (x < (xj - xi) * (y - yi) / (yj - yi) + xi) cross++;
+            const side = (xi - xj) * (y - yj) - (x - xj) * (yi - yj);
+            if (yi > yj) {
+              if (side > 0) wind++;
+            } else if (side < 0) wind--;
+          }
         }
-        if (inside) return 0;
       }
       for (let i = 1; i < rn; i++) {
         const d2 = distToSegment2(x, y, gx[ra + i - 1], gy[ra + i - 1], gx[ra + i], gy[ra + i]);
@@ -575,6 +581,7 @@
       }
       ra += rn;
     }
+    if (closed && (g.evenodd ? (cross & 1) === 1 : wind !== 0)) return 0;
     return Math.sqrt(best);
   }
   function asColumn(v) {
@@ -1039,6 +1046,13 @@
     const hit = el.closest("[data-vellum-id]");
     return hit ? hit.getAttribute("data-vellum-id") : null;
   }
+  function sourceTable(prov, id) {
+    const name = prov.sourceOf && prov.sourceOf[id] || "plot";
+    const tbl = name !== "plot" && prov.sources ? prov.sources[name] : void 0;
+    if (!tbl) return { source: "plot", fields: prov.fields, values: prov.values };
+    const fields = Array.isArray(tbl.fields) ? tbl.fields : tbl.fields == null ? [] : [tbl.fields];
+    return { source: name, fields, values: tbl.values };
+  }
   function download(blob, name) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1370,11 +1384,13 @@
         gy = Float64Array.from(ys);
         const nrs = g.nr != null ? asColumn(g.nr) : null;
         const rls = g.rl != null ? asColumn(g.rl) : null;
+        const eos = g.eo != null ? asColumn(g.eo) : null;
         let at = 0, ra = 0;
         for (let i = 0; i < keys.length; i++) {
           const n = ns[i] | 0;
           if (n <= 0 || at + n > gx.length) break;
           const rec = { kind: kinds[i], at, n };
+          if (eos && eos[i] === 1) rec.evenodd = true;
           if (nrs && rls) {
             const k = nrs[i] | 0;
             if (k > 1) {
@@ -2850,15 +2866,20 @@
           hideSourcePopover();
           return;
         }
-        shinyInput("source", { id: pid, rows, fields: provenance.fields }, { priority: "event" });
-        const values = provenance.values ? rows.map((r) => provenance.values[r - 1]).filter(Boolean) : null;
+        const tbl = sourceTable(provenance, pid);
+        shinyInput(
+          "source",
+          { id: pid, source: tbl.source, rows, fields: tbl.fields },
+          { priority: "event" }
+        );
+        const values = tbl.values ? rows.map((r) => tbl.values[r - 1]).filter(Boolean) : null;
         el.dispatchEvent(
           new window.CustomEvent("vellum:source", {
-            detail: { id: pid, rows, fields: provenance.fields, values },
+            detail: { id: pid, source: tbl.source, rows, fields: tbl.fields, values },
             bubbles: true
           })
         );
-        if (values) showSourcePopover(target, values);
+        if (values) showSourcePopover(target, tbl.fields, values);
       }
       let sourcePopover = null;
       function hideSourcePopover() {
@@ -2867,10 +2888,9 @@
           sourcePopover = null;
         }
       }
-      function showSourcePopover(node, values) {
+      function showSourcePopover(node, fields, values) {
         var _a;
         hideSourcePopover();
-        const fields = provenance.fields;
         const pop = document.createElement("div");
         pop.className = "vellumwidget-source";
         pop.setAttribute("role", "dialog");
@@ -3681,6 +3701,7 @@
     panToView,
     niceTicks,
     fmtTick,
-    dataToNative
+    dataToNative,
+    sourceTable
   };
 })();

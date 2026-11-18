@@ -7,6 +7,10 @@
 # own (double) dpi/size instead.
 suppressMessages(library(vellumplot))
 
+# Jitter, sina, sketch wobble and simulated data draw random numbers; seed every
+# page so a re-render reproduces the same figures instead of reshuffling them.
+set.seed(20261118)
+
 vg <- function(p, name, dpi = 150) {
   dir.create("figs", showWarnings = FALSE)
   f <- file.path("figs", paste0(name, ".png"))
