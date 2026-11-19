@@ -22,3 +22,41 @@ p <- vplot(faithful) |>
 #| echo: false
 vg(p, "density")
 ```
+
+## Histograms and frequency polygons
+
+`mark_histogram()` bins the way ggplot2 does. `binwidth` sets the width of each
+bin and `boundary` pins where the bins start, so the bars line up with round
+numbers instead of with the minimum of the data.
+
+```{r}
+p_hist <- vplot(faithful) |>
+  mark_histogram(x = eruptions, binwidth = 0.25, boundary = 1.5,
+                 fill = "#3182bd") |>
+  labs(title = "Old Faithful eruptions in quarter-minute bins",
+       x = "eruption (min)")
+```
+
+```{r}
+#| echo: false
+vg(p_hist, "density-histogram")
+```
+
+`mark_freqpoly()` takes the same binning arguments and joins the bin counts
+into a line, one per group, with an empty bin at each end so every line starts
+and ends on zero. Overlaid lines compare groups far better than stacked bars.
+
+```{r}
+peng <- na.omit(datasets::penguins)
+
+p_poly <- vplot(peng) |>
+  mark_freqpoly(x = flipper_len, color = species, binwidth = 4,
+                boundary = 170, linewidth = 1) |>
+  labs(title = "Flipper length by species", x = "flipper (mm)",
+       y = "penguins")
+```
+
+```{r}
+#| echo: false
+vg(p_poly, "density-freqpoly")
+```

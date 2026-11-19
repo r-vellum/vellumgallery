@@ -23,3 +23,28 @@ p <- vplot(mtcars) |>
 #| echo: false
 vg(p, "scatter-color")
 ```
+
+## Squishing the outliers into the scale
+
+A handful of extreme values can use up most of a colour ramp. Set the scale's
+`limits` to the range you care about and `oob = "squish"` clamps everything
+outside it onto the end colours, so the two 300+ hp cars read as "the most
+powerful" instead of stretching the palette for everyone else.
+
+The legend can also sit inside the panel when there is empty space for it:
+`theme(legend.position = "inside")` with `legend.position.inside` as fractions
+of the panel area. The justification follows the position, so `c(0.98, 0.98)`
+tucks the legend into the top-right corner.
+
+```{r}
+p_squish <- vplot(mtcars) |>
+  mark_point(x = wt, y = mpg, color = hp, size = 3) |>
+  scale_color_continuous(limits = c(50, 250), oob = "squish") |>
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.98, 0.98))
+```
+
+```{r}
+#| echo: false
+vg(p_squish, "scatter-color-squish")
+```
