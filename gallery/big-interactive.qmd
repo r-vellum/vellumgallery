@@ -69,10 +69,11 @@ as_widget(p, height = 820)
 
 ## When the image path kicks in
 
-The switch is automatic. The default `mode = "auto"` counts the keyed elements
-and moves to the image path above `raster_threshold`, which is 20,000; anything
-smaller keeps the per-element SVG it always used. Pass `mode = "svg"` or
-`mode = "raster"` to force one path.
+The switch is automatic. The default `render_options(mode = "auto")` counts the
+keyed elements and moves to the image path above `raster_threshold`, which is
+20,000; anything smaller keeps the per-element SVG it always used. Pass
+`render = render_options(mode = "svg")` or `render_options(mode = "raster")` to
+force one path.
 
 Zooming stays sharp. The base image is anti-aliased for the full view, and when
 you zoom in the widget redraws just the visible points on a canvas overlay,
