@@ -30,3 +30,48 @@ p <- hconcat(box, vio)
 #| echo: false
 vg(p, "boxplot-violin")
 ```
+
+## Horizontal boxes and violins
+
+Swap the axes and the boxes turn on their side. `orientation` is inferred as in
+ggplot2: a discrete `y` with a continuous `x` draws horizontal boxes and
+violins, which leaves room for long group names. `orientation = "y"` forces it.
+
+```{r}
+hbox <- vplot(peng) |>
+  mark_boxplot(x = body_mass, y = species, fill = species) |>
+  labs(title = "Boxplot", x = "body mass (g)", y = NULL)
+
+hvio <- vplot(peng) |>
+  mark_violin(x = body_mass, y = species, fill = species) |>
+  labs(title = "Violin", x = "body mass (g)", y = NULL)
+
+p_h <- hconcat(hbox, hvio)
+```
+
+```{r}
+#| echo: false
+vg(p_h, "boxplot-violin-horizontal")
+```
+
+## Means with confidence intervals
+
+`mark_summary()` collapses each group to a point and a range. With
+`fun.data = "mean_cl_normal"` that is the mean and its 95% confidence interval
+under a normal approximation, here drawn over the raw observations
+(`"mean_se"`, `"mean_sdl"` and `"median_hilow"` are the other built-ins). With
+only 7 to 14 cars per group the intervals are wide enough to see.
+
+```{r}
+p_sum <- vplot(mtcars) |>
+  mark_point(x = factor(cyl), y = mpg, color = factor(cyl), alpha = 0.4,
+             position = "jitter") |>
+  mark_summary(x = factor(cyl), y = mpg, fun.data = "mean_cl_normal") |>
+  labs(title = "Mean fuel economy, 95% confidence interval",
+       x = "cylinders", color = "cylinders")
+```
+
+```{r}
+#| echo: false
+vg(p_sum, "boxplot-violin-summary")
+```

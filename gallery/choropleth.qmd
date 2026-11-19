@@ -77,3 +77,30 @@ the per-feature keys a widget needs to know which county you hovered.
 
 For the cartographic furniture (a scale bar, a north arrow, a graticule) see
 [Scale bar, north arrow, graticule](map-decorations.qmd).
+
+## Two variables on one map
+
+A bivariate choropleth colours each county by two variables at once. `bi_class()`
+cuts both into terciles and `scale_fill_bivariate()` maps the nine
+combinations onto a two-dimensional palette. `guide_bivariate()` labels the
+swatch edges with the class breaks, and `rotate = TRUE` turns the key into a
+diamond with low-low at the bottom and high-high at the top.
+
+```{r}
+nc$sids_rate <- 1000 * nc$SID74 / nc$BIR74
+nc_bi <- bi_class(nc, BIR74, sids_rate)
+
+p_bi <- vplot(nc_bi, width = 8, height = 3.6) |>
+  mark_sf(fill = bi_class, color = "white", linewidth = 0.2) |>
+  coord_sf() |>
+  scale_fill_bivariate(palette = "GrPink", xlab = "births",
+                       ylab = "SIDS per 1,000") |>
+  guides(fill = guide_bivariate(rotate = TRUE, labels = TRUE,
+                                xlab = "births", ylab = "SIDS per 1,000")) |>
+  labs(title = "Births and SIDS rate, North Carolina (1974)")
+```
+
+```{r}
+#| echo: false
+vg(p_bi, "choropleth-bivariate")
+```
