@@ -199,6 +199,50 @@
     if (anyCss && typeof anyCss.escape === "function") return anyCss.escape(value);
     return value.replace(/["\\\]\[#.:;,()>~+*^$|=@!%&{}\/\s]/g, "\\$&");
   }
+  var STATE_SEL = [
+    "vellumwidget-cond-dim",
+    "vellumwidget-colorfiltered",
+    "vellumwidget-legend-muted",
+    "vellumwidget-legend-off",
+    "vellumwidget-selected",
+    "vellumwidget-filtered",
+    "vellumwidget-legend-hidden"
+  ].map((c) => "[data-key]." + c).join(", ");
+  function cssVar(cs, name, fallback) {
+    const v = cs ? cs.getPropertyValue(name).trim() : "";
+    return v || fallback;
+  }
+  function inlineStateStyles(live, clone) {
+    const a = live.querySelectorAll(STATE_SEL);
+    const b = clone.querySelectorAll(STATE_SEL);
+    if (a.length !== b.length) return;
+    for (let i = 0; i < a.length; i++) {
+      const n = a[i], c = b[i], cl = n.classList;
+      if (cl.contains("vellumwidget-filtered") || cl.contains("vellumwidget-legend-hidden")) {
+        c.style.display = "none";
+        continue;
+      }
+      let cs = null;
+      try {
+        cs = window.getComputedStyle(n);
+      } catch (e) {
+        cs = null;
+      }
+      if (!n.style.opacity) {
+        let op = "";
+        if (cl.contains("vellumwidget-legend-off") && cl.contains("vellumwidget-legend")) op = "0.4";
+        else if (cl.contains("vellumwidget-colorfiltered")) op = cssVar(cs, "--vellumwidget-colorfilter-opacity", "0.12");
+        else if (cl.contains("vellumwidget-cond-dim")) op = cssVar(cs, "--vellumwidget-dim-opacity", "0.28");
+        else if (cl.contains("vellumwidget-legend-muted")) op = "0.12";
+        if (op) c.style.opacity = op;
+      }
+      if (cl.contains("vellumwidget-selected")) {
+        c.style.stroke = cssVar(cs, "--vellumwidget-selected-stroke", cssVar(cs, "--vellumwidget-ink", "#111827"));
+        c.style.strokeWidth = cssVar(cs, "--vellumwidget-selected-width", "1.4px");
+        c.style.setProperty("paint-order", "normal");
+      }
+    }
+  }
 
   // srcts/dom.ts
   function keyOf(target) {
@@ -374,6 +418,8 @@
   // srcts/dlist.ts
   var DL_POINT = 0;
   var DL_RECT = 1;
+  var DL_FLAG_PICK = 16;
+  var DL_FLAG_BLEND = 32;
   function b64bytes(s) {
     const bin = atob(s);
     const out = new Uint8Array(bin.length);
@@ -423,7 +469,7 @@
     return s == null || !/^#[0-9a-fA-F]{8}$/.test(s) || /ff$/i.test(s);
   }
   function decodeDisplayList(raw) {
-    if (!raw || raw.format !== "vellum-display-list" || raw.version !== 1) return null;
+    if (!raw || raw.format !== "vellum-display-list" || raw.version !== 1 && raw.version !== 2 || !raw.record) return null;
     const n = raw.n || 0;
     const kind = u8(dlColumn(raw.record.kind));
     const pt = raw.point, rc = raw.rect, pa = raw.path;
@@ -457,8 +503,27 @@
       clips: [],
       keys: [],
       panels: asColumn(raw.panels).map(String),
-      exact: true
+      exact: true,
+      group: raw.record.group ? u32(dlColumn(raw.record.group)) : new Uint32Array(n),
+      run: raw.record.run ? u32(dlColumn(raw.record.run)) : new Uint32Array(n),
+      nRuns: Number(raw.runs) || 0,
+      covered: true,
+      runImgs: null,
+      runHref: null,
+      runW: 0,
+      runH: 0,
+      gradients: [],
+      groups: [],
+      cpXy: new Float32Array(0),
+      cpRunOff: new Uint32Array(0),
+      cpPathOff: new Uint32Array(0),
+      cpEvenodd: new Uint8Array(0)
     };
+    if (dl.group.length !== n) dl.group = new Uint32Array(n);
+    if (dl.run.length !== n) {
+      dl.run = new Uint32Array(n);
+      dl.nRuns = 0;
+    }
     const k = raw.keys;
     if (k && typeof k === "object" && !Array.isArray(k) && "type" in k) {
       const kc = dlColumn(k);
@@ -470,7 +535,9 @@
     const P = raw.paints;
     const fill = asColumn(P.fill), stroke = asColumn(P.stroke), sw = asColumn(P.stroke_width);
     const dash = asColumn(P.dash), cap = asColumn(P.linecap), join = asColumn(P.linejoin);
-    for (let i = 0; i < fill.length; i++) {
+    const fg = P.fill_gradient != null ? asColumn(P.fill_gradient) : [];
+    const np = Math.max(fill.length, stroke.length, sw.length, cap.length, join.length, fg.length);
+    for (let i = 0; i < np; i++) {
       const f = isNa(fill[i]) ? null : String(fill[i]);
       const s = isNa(stroke[i]) ? null : String(stroke[i]);
       const d = isNa(dash[i]) ? null : String(dash[i]).split(",").map(Number).filter((x) => isFinite(x));
@@ -481,16 +548,59 @@
         dash: d && d.length ? d : null,
         cap: cap[i] || "butt",
         join: join[i] || "miter",
-        opaque: opaqueHex(f) && opaqueHex(s)
+        opaque: opaqueHex(f) && opaqueHex(s),
+        grad: Number(fg[i]) || 0
       });
     }
     if (raw.clips) {
       const x0 = asColumn(raw.clips.x0), y0 = asColumn(raw.clips.y0), x1 = asColumn(raw.clips.x1), y1 = asColumn(raw.clips.y1);
-      for (let i = 0; i < x0.length; i++) dl.clips.push({ x0: x0[i], y0: y0[i], x1: x1[i], y1: y1[i] });
+      const ps = raw.clips.path_start != null ? asColumn(raw.clips.path_start) : [];
+      const pn = raw.clips.path_n != null ? asColumn(raw.clips.path_n) : [];
+      for (let i = 0; i < x0.length; i++) dl.clips.push({ x0: x0[i], y0: y0[i], x1: x1[i], y1: y1[i], ps: Number(ps[i]) || 0, pn: Number(pn[i]) || 0 });
     }
+    const G = raw.gradients;
+    if (G && G.type != null) {
+      const col = (v) => asColumn(v).map(Number);
+      const ty = asColumn(G.type), x1 = col(G.x1), y1 = col(G.y1), x2 = col(G.x2), y2 = col(G.y2), r1 = col(G.r1), r2 = col(G.r2);
+      const a = col(G.a), b = col(G.b), c = col(G.c), d = col(G.d), e = col(G.e), f = col(G.f);
+      const so = col(G.stop_offset), sp = col(G.stop_pos), sc = asColumn(G.stop_color).map(String);
+      for (let i = 0; i < ty.length; i++) {
+        const stops = [];
+        for (let k2 = so[i]; k2 < so[i + 1]; k2++) stops.push({ o: sp[k2], c: sc[k2] });
+        dl.gradients.push({
+          radial: ty[i] === "radial",
+          x1: x1[i],
+          y1: y1[i],
+          x2: x2[i],
+          y2: y2[i],
+          r1: r1[i],
+          r2: r2[i],
+          m: [a[i], b[i], c[i], d[i], e[i], f[i]],
+          stops
+        });
+      }
+    }
+    if (raw.groups && raw.groups.alpha != null) {
+      const al = asColumn(raw.groups.alpha), par = asColumn(raw.groups.parent);
+      for (let i = 0; i < al.length; i++) dl.groups.push({ alpha: Number(al[i]), parent: Number(par[i]) || 0 });
+    }
+    if (raw.clip_paths) {
+      dl.cpXy = f32(dlColumn(raw.clip_paths.xy));
+      dl.cpRunOff = u32(dlColumn(raw.clip_paths.run_offset));
+      dl.cpPathOff = u32(dlColumn(raw.clip_paths.path_offset));
+      dl.cpEvenodd = u8(dlColumn(raw.clip_paths.evenodd));
+    }
+    for (let i = 0; i < dl.paints.length; i++) if (dl.paints[i].grad > dl.gradients.length) dl.paints[i].grad = -1;
     let ip = 0, ir = 0, ih = 0;
     for (let i = 0; i < n; i++) {
-      if (dl.flags[i]) dl.exact = false;
+      if (dl.flags[i] & ~DL_FLAG_PICK) dl.exact = false;
+      const pg = dl.paints[dl.paint[i]];
+      if (pg && pg.grad < 0 || dl.group[i] > dl.groups.length) {
+        dl.flags[i] |= 1;
+        dl.exact = false;
+      }
+      if (dl.flags[i] & ~DL_FLAG_PICK && !(dl.run[i] > 0 && dl.run[i] <= dl.nRuns)) dl.covered = false;
+      if (dl.flags[i] & DL_FLAG_BLEND) dl.covered = false;
       const kd = kind[i];
       if (kd === DL_POINT) {
         const j = ip++, r = dl.r[j];
@@ -526,6 +636,15 @@
       }
     }
     return dl;
+  }
+  function attachRuns(dl, imgs, hrefs, w, h) {
+    if (!dl.covered || !dl.nRuns || imgs.length !== dl.nRuns || !(w > 0 && h > 0)) return false;
+    dl.runImgs = imgs;
+    dl.runHref = hrefs;
+    dl.runW = w;
+    dl.runH = h;
+    dl.exact = true;
+    return true;
   }
   function fillBboxes(elements, dl) {
     const box = {};
@@ -619,6 +738,32 @@
       }
       if (closed) ctx.closePath();
     }
+  }
+  function traceClipPath(ctx, dl, shape, A) {
+    for (let run = dl.cpPathOff[shape]; run < dl.cpPathOff[shape + 1]; run++) {
+      const v0 = dl.cpRunOff[run], v1 = dl.cpRunOff[run + 1];
+      for (let v = v0; v < v1; v++) {
+        const x = A.ax * dl.cpXy[2 * v] + A.bx, y = A.ay * dl.cpXy[2 * v + 1] + A.by;
+        if (v === v0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+    }
+  }
+  function fillGradient(ctx, g, A, rule, override) {
+    ctx.save();
+    ctx.setTransform(A.ax, 0, 0, A.ay, A.bx, A.by);
+    ctx.transform(g.m[0], g.m[1], g.m[2], g.m[3], g.m[4], g.m[5]);
+    let paint;
+    if (override) paint = override;
+    else {
+      const cg = g.radial ? ctx.createRadialGradient(g.x1, g.y1, g.r1, g.x2, g.y2, g.r2) : ctx.createLinearGradient(g.x1, g.y1, g.x2, g.y2);
+      for (let k = 0; k < g.stops.length; k++) cg.addColorStop(Math.min(1, Math.max(0, g.stops[k].o)), g.stops[k].c);
+      paint = cg;
+    }
+    ctx.fillStyle = paint;
+    ctx.fill(rule);
+    ctx.restore();
   }
 
   // srcts/tooltip.ts
@@ -1589,6 +1734,7 @@
       ws.stage.appendChild(ws.retickLayer);
       applyPanTransforms();
       setupConstantMarks();
+      setupConstantFurniture();
       retick();
     }
     function applyPanTransforms() {
@@ -1634,6 +1780,69 @@
           }
         }
       }
+    }
+    function setupConstantFurniture() {
+      if (!ws.axisZoomActive || ws.opts.zoomMarks === "scale") return;
+      for (let i = 0; i < ws.azPanels.length; i++) {
+        const a = ws.azPanels[i];
+        constantFurnitureIn(a.pan);
+        if (a.mirror) constantFurnitureIn(a.mirror);
+      }
+    }
+    const SHAPES = { path: true, line: true, polyline: true, polygon: true, rect: true, circle: true, ellipse: true };
+    function constantFurnitureIn(pan) {
+      const all = pan.querySelectorAll("*");
+      for (let i = 0; i < all.length; i++) {
+        const n = all[i];
+        const tag = n.tagName.toLowerCase();
+        if (tag === "text") {
+          constantText(n);
+          continue;
+        }
+        if (!SHAPES[tag]) continue;
+        if (n.closest('.vellumwidget-detail, [role="grid"]')) continue;
+        if (n.style.getPropertyValue("transform")) continue;
+        if (!n.closest("[data-key]") && inGlyphLayer(n)) {
+          n.style.setProperty("transform-box", "fill-box");
+          n.style.setProperty("transform-origin", "center");
+          const place = transAsCss(n);
+          n.style.setProperty("transform", (place ? place + " " : "") + "scale(var(--vw-ix,1),var(--vw-iy,1))");
+        } else {
+          n.setAttribute("vector-effect", "non-scaling-stroke");
+        }
+      }
+    }
+    function inGlyphLayer(n) {
+      const g = n.closest("[data-vellum-id]");
+      const m = g ? /^layer-\d+-([a-z0-9_]+)-g\d+/.exec(g.getAttribute("data-vellum-id") || "") : null;
+      return !!m && GLYPH_MARKS[m[1]] === true;
+    }
+    function constantText(n) {
+      if (n.style.getPropertyValue("transform")) return;
+      const own = (n.getAttribute("transform") || "").trim();
+      const place = transAsCss(n);
+      if (own && !place) return;
+      const x = parseFloat(n.getAttribute("x") || "") || 0, y = parseFloat(n.getAttribute("y") || "") || 0;
+      let X = x, Y = y;
+      const m = /matrix\(([^)]*)\)/.exec(place);
+      if (m) {
+        const v = m[1].split(",").map(Number);
+        X = v[0] * x + v[2] * y + v[4];
+        Y = v[1] * x + v[3] * y + v[5];
+      } else {
+        const t = /translate\(([-+\d.eE]+)px,([-+\d.eE]+)px\)/.exec(place);
+        if (t) {
+          X = x + Number(t[1]);
+          Y = y + Number(t[2]);
+        }
+      }
+      if (!isFinite(X) || !isFinite(Y)) return;
+      n.style.setProperty("transform-box", "view-box");
+      n.style.setProperty("transform-origin", "0px 0px");
+      n.style.setProperty(
+        "transform",
+        "translate(" + X + "px," + Y + "px) scale(var(--vw-ix,1),var(--vw-iy,1)) translate(" + -X + "px," + -Y + "px)" + (place ? " " + place : "")
+      );
     }
     function transAsCss(node) {
       const t = (node.getAttribute("transform") || "").trim();
@@ -2146,15 +2355,17 @@
       }
       const vb = ws.vb;
       for (let i = 0; i < dl.n; i++) {
-        let x = (dl.bx0[i] + dl.bx1[i]) / 2, y = (dl.by0[i] + dl.by1[i]) / 2;
+        let x0 = dl.bx0[i], x1 = dl.bx1[i], y0 = dl.by0[i], y1 = dl.by1[i];
         const t = dl.panel[i] <= np ? T[dl.panel[i]] : null;
         if (t) {
-          x = t.sx * x + t.tx;
-          y = t.sy * y + t.ty;
-          if (x < t.r[0] || x > t.r[2] || y < t.r[1] || y > t.r[3]) continue;
+          x0 = t.sx * x0 + t.tx;
+          x1 = t.sx * x1 + t.tx;
+          y0 = t.sy * y0 + t.ty;
+          y1 = t.sy * y1 + t.ty;
+          if (x1 < t.r[0] || x0 > t.r[2] || y1 < t.r[1] || y0 > t.r[3]) continue;
         } else if (ws.axisZoomActive) {
-          if (x < ws.vb0.x || x > ws.vb0.x + ws.vb0.w || y < ws.vb0.y || y > ws.vb0.y + ws.vb0.h) continue;
-        } else if (x < vb.x || x > vb.x + vb.w || y < vb.y || y > vb.y + vb.h) continue;
+          if (x1 < ws.vb0.x || x0 > ws.vb0.x + ws.vb0.w || y1 < ws.vb0.y || y0 > ws.vb0.y + ws.vb0.h) continue;
+        } else if (x1 < vb.x || x0 > vb.x + vb.w || y1 < vb.y || y0 > vb.y + vb.h) continue;
         out.push(i);
         if (out.length > cap) return null;
       }
@@ -2189,7 +2400,75 @@
       }
       return [c, null];
     }
-    function nodeFor(dl, i) {
+    let defsSeq = 0;
+    function gradRef(D, dl, gi) {
+      if (D.grads[gi]) return D.grads[gi];
+      const g = dl.gradients[gi - 1];
+      const id = D.pre + "g" + gi;
+      const e = document.createElementNS(SVGNS, g.radial ? "radialGradient" : "linearGradient");
+      e.setAttribute("id", id);
+      e.setAttribute("gradientUnits", "userSpaceOnUse");
+      e.setAttribute("gradientTransform", "matrix(" + g.m.join(" ") + ")");
+      if (g.radial) {
+        e.setAttribute("cx", String(g.x2));
+        e.setAttribute("cy", String(g.y2));
+        e.setAttribute("r", String(g.r2));
+        e.setAttribute("fx", String(g.x1));
+        e.setAttribute("fy", String(g.y1));
+        e.setAttribute("fr", String(g.r1));
+      } else {
+        e.setAttribute("x1", String(g.x1));
+        e.setAttribute("y1", String(g.y1));
+        e.setAttribute("x2", String(g.x2));
+        e.setAttribute("y2", String(g.y2));
+      }
+      for (let k = 0; k < g.stops.length; k++) {
+        const st = document.createElementNS(SVGNS, "stop");
+        const c = splitHex(g.stops[k].c);
+        st.setAttribute("offset", String(g.stops[k].o));
+        st.setAttribute("stop-color", c[0]);
+        if (c[1] != null) st.setAttribute("stop-opacity", c[1]);
+        e.appendChild(st);
+      }
+      D.el.appendChild(e);
+      return D.grads[gi] = id;
+    }
+    function clipRef(D, dl, ci) {
+      if (D.clips[ci]) return D.clips[ci];
+      const c = dl.clips[ci - 1];
+      const ids = [];
+      for (let q = 0; q <= c.pn; q++) ids.push(D.pre + "c" + ci + "-" + q);
+      for (let q = 0; q <= c.pn; q++) {
+        const cp = document.createElementNS(SVGNS, "clipPath");
+        cp.setAttribute("id", ids[q]);
+        cp.setAttribute("clipPathUnits", "userSpaceOnUse");
+        if (q < c.pn) {
+          const sh = c.ps + q;
+          let d = "";
+          for (let run = dl.cpPathOff[sh]; run < dl.cpPathOff[sh + 1]; run++) {
+            for (let v = dl.cpRunOff[run]; v < dl.cpRunOff[run + 1]; v++) {
+              d += (v === dl.cpRunOff[run] ? "M" : "L") + dl.cpXy[2 * v] + " " + dl.cpXy[2 * v + 1];
+            }
+            d += "Z";
+          }
+          const path = document.createElementNS(SVGNS, "path");
+          path.setAttribute("d", d);
+          if (dl.cpEvenodd[sh] === 1) path.setAttribute("clip-rule", "evenodd");
+          cp.appendChild(path);
+          cp.setAttribute("clip-path", "url(#" + ids[q + 1] + ")");
+        } else {
+          const r = document.createElementNS(SVGNS, "rect");
+          r.setAttribute("x", String(c.x0));
+          r.setAttribute("y", String(c.y0));
+          r.setAttribute("width", String(Math.max(0, c.x1 - c.x0)));
+          r.setAttribute("height", String(Math.max(0, c.y1 - c.y0)));
+          cp.appendChild(r);
+        }
+        D.el.appendChild(cp);
+      }
+      return D.clips[ci] = ids[0];
+    }
+    function nodeFor(dl, i, D) {
       const j = dl.row[i], kd = dl.kind[i];
       let n;
       let glyph = false;
@@ -2237,7 +2516,9 @@
       }
       const pt = dl.paints[dl.paint[i]];
       const fillable = kd !== 2 || dl.closed[j] === 1;
-      if (pt.fill && fillable && !(kd === DL_POINT && isLineGlyph(dl.shape[j]))) {
+      if (pt.grad > 0 && D && fillable) {
+        n.setAttribute("fill", "url(#" + gradRef(D, dl, pt.grad) + ")");
+      } else if (pt.fill && fillable && !(kd === DL_POINT && isLineGlyph(dl.shape[j]))) {
         const f = splitHex(pt.fill);
         n.setAttribute("fill", f[0]);
         if (f[1] != null) n.setAttribute("fill-opacity", f[1]);
@@ -2252,6 +2533,8 @@
         n.setAttribute("stroke-linejoin", pt.join);
       }
       n.setAttribute("data-key", dl.keys[dl.key[i]]);
+      const ci = dl.clip[i];
+      if (D && ci > 0 && dl.clips[ci - 1] && dl.clips[ci - 1].pn > 0) n.setAttribute("clip-path", "url(#" + clipRef(D, dl, ci) + ")");
       if (ws.axisZoomActive) {
         if (glyph && ws.opts.zoomMarks !== "scale") {
           n.style.setProperty("transform-box", "fill-box");
@@ -2288,11 +2571,102 @@
         groups[p] = g;
         return g;
       };
+      let D;
+      if (dl.gradients.length || dl.groups.length || dl.cpPathOff.length > 1 || dl.runHref) {
+        const el = document.createElementNS(SVGNS, "defs");
+        el.setAttribute("class", "vellumwidget-detail");
+        svg.insertBefore(el, svg.firstChild);
+        ws.detailGroups.push(el);
+        D = { el, pre: "vw-detail" + ++defsSeq + "-", grads: {}, clips: {} };
+      }
+      const chains = {};
+      const hostFor = function(p, grp) {
+        const root = groupFor(p);
+        if (!dl.groups.length) return root;
+        const want = [];
+        for (let q = grp; q > 0 && want.length < 64; q = dl.groups[q - 1] ? dl.groups[q - 1].parent : 0) want.unshift(q);
+        const st = chains[p] || (chains[p] = []);
+        let k = 0;
+        while (k < st.length && k < want.length && st[k].g === want[k]) k++;
+        st.length = k;
+        while (st.length < want.length) {
+          const g = document.createElementNS(SVGNS, "g");
+          g.setAttribute("opacity", String(dl.groups[want[st.length] - 1].alpha));
+          (st.length ? st[st.length - 1].el : root).appendChild(g);
+          st.push({ g: want[st.length], el: g });
+        }
+        return st.length ? st[st.length - 1].el : root;
+      };
+      const runIds = {};
+      const placed = {};
+      const placeRun = function(p, r) {
+        const tag = p + ":" + r;
+        if (placed[tag] || !D || !dl.runHref) return;
+        placed[tag] = true;
+        if (!runIds[r]) {
+          const im = document.createElementNS(SVGNS, "image");
+          runIds[r] = D.pre + "run" + r;
+          im.setAttribute("id", runIds[r]);
+          im.setAttribute("x", "0");
+          im.setAttribute("y", "0");
+          im.setAttribute("width", String(dl.runW));
+          im.setAttribute("height", String(dl.runH));
+          im.setAttribute("preserveAspectRatio", "none");
+          im.setAttribute("href", dl.runHref[r - 1]);
+          D.el.appendChild(im);
+        }
+        const u = document.createElementNS(SVGNS, "use");
+        u.setAttribute("class", "vellumwidget-detail-run");
+        u.setAttribute("href", "#" + runIds[r]);
+        groupFor(p).appendChild(u);
+        if (chains[p]) chains[p].length = 0;
+      };
+      let order = vis;
+      if (dl.runImgs) {
+        const firsts = {}, extra = [];
+        for (let i = 0; i < dl.n; i++) {
+          if (!(dl.run[i] > 0)) continue;
+          const tag = dl.panel[i] + ":" + dl.run[i];
+          if (!firsts[tag]) {
+            firsts[tag] = true;
+            extra.push(i);
+          }
+        }
+        if (extra.length) {
+          const all = {};
+          for (let v = 0; v < vis.length; v++) all[vis[v]] = true;
+          for (let e = 0; e < extra.length; e++) all[extra[e]] = true;
+          order = Object.keys(all).map(Number).sort((a, b) => a - b);
+        }
+      }
+      const visSet = {};
+      for (let v = 0; v < vis.length; v++) visSet[vis[v]] = true;
       const seen = {};
-      for (let v = 0; v < vis.length; v++) {
-        const i = vis[v];
-        const n = nodeFor(dl, i);
-        groupFor(dl.panel[i] <= dl.panels.length ? dl.panel[i] : 0).appendChild(n);
+      for (let v = 0; v < order.length; v++) {
+        const i = order[v];
+        if (dl.runImgs && dl.run[i] > 0) {
+          const p = dl.panel[i] <= dl.panels.length ? dl.panel[i] : 0;
+          placeRun(p, dl.run[i]);
+          if (!visSet[i] || dl.flags[i] & DL_FLAG_PICK) continue;
+          const n2 = nodeFor(dl, i);
+          n2.setAttribute("fill", "#000");
+          n2.setAttribute("fill-opacity", "0");
+          n2.removeAttribute("stroke");
+          n2.removeAttribute("stroke-opacity");
+          n2.removeAttribute("stroke-dasharray");
+          n2.setAttribute("class", "vellumwidget-detail-proxy");
+          groupFor(p).appendChild(n2);
+          const k2 = dl.keys[dl.key[i]];
+          (ws.nodesByKey[k2] = ws.nodesByKey[k2] || []).push(n2);
+          if (!seen[k2]) {
+            seen[k2] = true;
+            ws.detailKeys.push(k2);
+          }
+          continue;
+        }
+        if (dl.flags[i]) continue;
+        const n = nodeFor(dl, i, D);
+        hostFor(dl.panel[i] <= dl.panels.length ? dl.panel[i] : 0, dl.group[i]).appendChild(n);
         const k = dl.keys[dl.key[i]];
         (ws.nodesByKey[k] = ws.nodesByKey[k] || []).push(n);
         if (!seen[k]) {
@@ -3592,6 +3966,29 @@
   }
 
   // srcts/features/navigator.ts
+  var NAV_MIN_STROKE = 1;
+  function inherited(el, top, attr, prop) {
+    for (let n = el; n; n = n === top ? null : n.parentElement) {
+      const st = n.style ? n.style.getPropertyValue(prop) : "";
+      if (st) return st;
+      const a = n.getAttribute(attr);
+      if (a !== null && a !== "inherit") return a;
+    }
+    return null;
+  }
+  function navStrokes(clone) {
+    const shapes = clone.querySelectorAll("path,line,polyline,polygon,rect,circle,ellipse");
+    for (let i = 0; i < shapes.length; i++) {
+      const el = shapes[i];
+      const stroke = inherited(el, clone, "stroke", "stroke");
+      if (!stroke || stroke === "none" || stroke === "transparent") continue;
+      const w = parseFloat(inherited(el, clone, "stroke-width", "stroke-width") || "1");
+      const sw = String(Math.max(isFinite(w) ? w : 1, NAV_MIN_STROKE));
+      el.setAttribute("vector-effect", "non-scaling-stroke");
+      el.setAttribute("stroke-width", sw);
+      if (el.style && el.style.getPropertyValue("stroke-width")) el.style.setProperty("stroke-width", sw);
+    }
+  }
   function navigatorFeature(ws) {
     function navToView(xFrac, wFrac) {
       if (!ws.vb0) return;
@@ -3633,6 +4030,12 @@
       clone.setAttribute("preserveAspectRatio", "none");
       clone.removeAttribute("width");
       clone.removeAttribute("height");
+      if (ws.aboveEl) {
+        const g = document.createElementNS(SVGNS, "g");
+        g.setAttribute("class", "vellumwidget-nav-above");
+        for (let c = ws.aboveEl.firstChild; c; c = c.nextSibling) g.appendChild(c.cloneNode(true));
+        clone.appendChild(g);
+      }
       const defs = clone.querySelectorAll("defs");
       for (let i = 0; i < defs.length; i++) defs[i].remove();
       const uses = clone.querySelectorAll("use.vellumwidget-marks");
@@ -3646,6 +4049,9 @@
         keyed[i].removeAttribute("role");
       }
       clone.removeAttribute("id");
+      const ided = clone.querySelectorAll(".vellumwidget-nav-above [id]");
+      for (let i = 0; i < ided.length; i++) ided[i].removeAttribute("id");
+      navStrokes(clone);
       mini.appendChild(clone);
       ws.navEl.appendChild(mini);
       ws.navWindow = document.createElement("div");
@@ -5012,7 +5418,7 @@
         }
         return;
       }
-      const rScale = ws.opts.zoomMarks === "scale" ? Math.min(W / ws.vb.w, H / ws.vb.h) : Math.min(W / ws.vb0.w, H / ws.vb0.h);
+      const rScale = Math.min(W / ws.vb.w, H / ws.vb.h);
       const x0 = ws.vb.x, y0 = ws.vb.y, x1 = ws.vb.x + ws.vb.w, y1 = ws.vb.y + ws.vb.h;
       for (let i = 0; i < n; i++) {
         const px = cx[i], py = cy[i];
@@ -5056,31 +5462,12 @@
       }
       const wasShown = ws.canvasEl.style.display === "block";
       const [W, H] = fitCanvas();
-      const frame = az ? vb0 : vb;
-      const q0 = userToCanvas(frame, W, H, 0, 0), q1 = userToCanvas(frame, W, H, 1, 1);
-      const kx = q1.px - q0.px, ky = q1.py - q0.py;
-      const base = Math.min(W / vb0.w, H / vb0.h);
-      const scaleMarks = ws.opts.zoomMarks === "scale";
-      const np = dl.panels.length;
-      const aff = [], gs = [], pclip = [];
-      const ident = { ax: kx, bx: q0.px, ay: ky, by: q0.py };
-      for (let p = 0; p <= np; p++) {
-        let A = ident, g = scaleMarks ? kx : base, c = null;
-        const a = az && p > 0 ? ws.azPanels.filter((q) => q.p.name === dl.panels[p - 1])[0] : null;
-        if (a) {
-          const t = ws.fx.azT(a);
-          A = { ax: kx * t.sx, bx: kx * t.tx + q0.px, ay: ky * t.sy, by: ky * t.ty + q0.py };
-          g = scaleMarks ? base * Math.min(t.sx, t.sy) : base;
-          c = [kx * a.p.px0 + q0.px, ky * a.p.py0 + q0.py, kx * a.p.px1 + q0.px, ky * a.p.py1 + q0.py];
-        }
-        aff.push(A);
-        gs.push(g);
-        pclip.push(c);
-      }
+      const L = listLayout(dl, W, H);
       if (!settled && dl.n > LIVE_DRAW_MAX) {
         let vis = 0;
+        const np = dl.panels.length;
         for (let i = 0; i < dl.n && vis <= LIVE_DRAW_MAX; i++) {
-          const A = aff[dl.panel[i] <= np ? dl.panel[i] : 0], pc = pclip[dl.panel[i] <= np ? dl.panel[i] : 0];
+          const A = L.aff[dl.panel[i] <= np ? dl.panel[i] : 0], pc = L.pclip[dl.panel[i] <= np ? dl.panel[i] : 0];
           const x = A.ax * (dl.bx0[i] + dl.bx1[i]) / 2 + A.bx, y = A.ay * (dl.by0[i] + dl.by1[i]) / 2 + A.by;
           if (x < 0 || y < 0 || x > W || y > H) continue;
           if (pc && (x < pc[0] || x > pc[2] || y < pc[1] || y > pc[3])) continue;
@@ -5102,35 +5489,154 @@
         }
       }
       showMarksLayer(!dl.exact);
+      paintList(ctx, dl, W, H, L, styled);
+    }
+    function listLayout(dl, W, H) {
+      const vb = ws.vb, vb0 = ws.vb0;
+      const az = ws.axisZoomActive && ws.azPanels.length > 0;
+      const frame = az ? vb0 : vb;
+      const q0 = userToCanvas(frame, W, H, 0, 0), q1 = userToCanvas(frame, W, H, 1, 1);
+      const kx = q1.px - q0.px, ky = q1.py - q0.py;
+      const base = Math.min(W / vb0.w, H / vb0.h);
+      const scaleMarks = ws.opts.zoomMarks === "scale";
+      const np = dl.panels.length;
+      const aff = [], gs = [], pclip = [];
+      const ident = { ax: kx, bx: q0.px, ay: ky, by: q0.py };
+      for (let p = 0; p <= np; p++) {
+        let A = ident, g = az && !scaleMarks ? base : kx, c = null;
+        const a = az && p > 0 ? ws.azPanels.filter((q) => q.p.name === dl.panels[p - 1])[0] : null;
+        if (a) {
+          const t = ws.fx.azT(a);
+          A = { ax: kx * t.sx, bx: kx * t.tx + q0.px, ay: ky * t.sy, by: ky * t.ty + q0.py };
+          g = scaleMarks ? base * Math.min(t.sx, t.sy) : base;
+          c = [kx * a.p.px0 + q0.px, ky * a.p.py0 + q0.py, kx * a.p.px1 + q0.px, ky * a.p.py1 + q0.py];
+        }
+        aff.push(A);
+        gs.push(g);
+        pclip.push(c);
+      }
+      return { aff, gs, pclip, base: az ? base : kx };
+    }
+    function paintList(ctx, dl, W, H, L, styled) {
+      const aff = L.aff, gs = L.gs, pclip = L.pclip, base = L.base, np = dl.panels.length;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, H);
       const flags = styled ? ws.msFlags : null, recol = styled ? ws.msColor : null, pal = ws.msPalette;
       const dimA = ws.msDimAlpha;
-      let curFill = null, curStroke = null;
+      let tgt = ctx;
+      const open_ = [];
+      let curFill = null, curStroke = null, curGrad = 0;
       let curState = -1, curPaint = -1, curOv = 0, curAlpha = 1, open = false, batch = false;
+      let curA = aff[0];
       const flush = function() {
         if (!open) return;
         const pt = dl.paints[curPaint];
-        if (curFill) {
-          ctx.fillStyle = curFill;
-          ctx.fill();
+        if (curGrad > 0) fillGradient(tgt, dl.gradients[curGrad - 1], curA, "nonzero");
+        else if (curFill) {
+          tgt.fillStyle = curFill;
+          tgt.fill();
         }
-        if (curStroke && pt.width > 0) ctx.stroke();
+        if (curStroke && pt.width > 0) tgt.stroke();
         open = false;
       };
       const setPaint = function(pi, ov) {
         const pt = dl.paints[pi];
-        ctx.lineWidth = pt.width * base;
-        ctx.setLineDash(pt.dash ? pt.dash.map((d) => d * base) : []);
-        ctx.lineCap = pt.cap;
-        ctx.lineJoin = pt.join;
+        tgt.lineWidth = pt.width * base;
+        tgt.setLineDash(pt.dash ? pt.dash.map((d) => d * base) : []);
+        tgt.lineCap = pt.cap;
+        tgt.lineJoin = pt.join;
         const oc = ov ? pal[ov - 1] : null;
-        curFill = pt.fill && oc ? withAlphaOf(oc, pt.fill) : pt.fill;
+        curGrad = pt.grad > 0 && !oc ? pt.grad : 0;
+        curFill = pt.grad > 0 ? oc || null : pt.fill && oc ? withAlphaOf(oc, pt.fill) : pt.fill;
         curStroke = pt.stroke && oc ? withAlphaOf(oc, pt.stroke) : pt.stroke;
-        if (curStroke) ctx.strokeStyle = curStroke;
+        if (curStroke) tgt.strokeStyle = curStroke;
       };
-      ctx.save();
+      const closeTo = function(keep) {
+        while (open_.length > keep) {
+          const lay = open_.pop();
+          const dst = open_.length ? open_[open_.length - 1].x : ctx;
+          dst.save();
+          dst.setTransform(1, 0, 0, 1, 0, 0);
+          dst.globalAlpha = dl.groups[lay.g - 1].alpha;
+          dst.drawImage(lay.c, 0, 0);
+          dst.restore();
+          layerPool.push(lay.c);
+        }
+      };
+      const enterGroup = function(g) {
+        const want = [];
+        for (let q = g; q > 0 && want.length < 64; q = dl.groups[q - 1] ? dl.groups[q - 1].parent : 0) want.unshift(q);
+        let k = 0;
+        while (k < open_.length && k < want.length && open_[k].g === want[k]) k++;
+        if (k === open_.length && k === want.length) return;
+        flush();
+        tgt.restore();
+        closeTo(k);
+        while (open_.length < want.length) {
+          const c = layerPool.pop() || document.createElement("canvas");
+          if (c.width !== W || c.height !== H) {
+            c.width = W;
+            c.height = H;
+          }
+          const x = typeof c.getContext === "function" ? c.getContext("2d") : null;
+          if (!x) break;
+          x.setTransform(1, 0, 0, 1, 0, 0);
+          x.clearRect(0, 0, W, H);
+          open_.push({ g: want[open_.length], c, x });
+        }
+        tgt = open_.length ? open_[open_.length - 1].x : ctx;
+        tgt.save();
+        curState = -1;
+        curPaint = -1;
+        curAlpha = 1;
+        tgt.globalAlpha = 1;
+      };
+      const runImgs = dl.runImgs;
+      const drawnRun = [];
+      const drawRun = function(r) {
+        const img = runImgs[r - 1];
+        if (!img) return;
+        const one = function(A, pc) {
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          if (pc) {
+            ctx.beginPath();
+            ctx.rect(pc[0], pc[1], pc[2] - pc[0], pc[3] - pc[1]);
+            ctx.clip();
+          }
+          ctx.setTransform(A.ax, 0, 0, A.ay, A.bx, A.by);
+          ctx.drawImage(img, 0, 0, dl.runW, dl.runH);
+          ctx.restore();
+        };
+        let any = false;
+        for (let p = 1; p <= np; p++) if (pclip[p]) {
+          one(aff[p], pclip[p]);
+          any = true;
+        }
+        if (!any) one(aff[0], null);
+      };
+      let curGroup = 0;
+      tgt.save();
       for (let i = 0; i < dl.n; i++) {
+        if (runImgs && dl.run[i] > 0) {
+          const r = dl.run[i];
+          if (!drawnRun[r]) {
+            drawnRun[r] = true;
+            if (curGroup !== 0) {
+              enterGroup(0);
+              curGroup = 0;
+            }
+            flush();
+            tgt.restore();
+            drawRun(r);
+            tgt.save();
+            curState = -1;
+            curPaint = -1;
+            curAlpha = 1;
+            tgt.globalAlpha = 1;
+          }
+          continue;
+        }
         if (dl.flags[i]) continue;
         let ov = 0, alpha = 1;
         if (flags) {
@@ -5155,29 +5661,39 @@
         const pc = pclip[p];
         if (x1 < 0 || y1 < 0 || x0 > W || y0 > H) continue;
         if (pc && (x1 < pc[0] || x0 > pc[2] || y1 < pc[1] || y0 > pc[3])) continue;
+        if (dl.group[i] !== curGroup) {
+          enterGroup(dl.group[i]);
+          curGroup = dl.group[i];
+        }
         const st = p * 65536 + dl.clip[i];
         if (st !== curState) {
           flush();
-          ctx.restore();
-          ctx.save();
+          tgt.restore();
+          tgt.save();
           if (pc) {
-            ctx.beginPath();
-            ctx.rect(pc[0], pc[1], pc[2] - pc[0], pc[3] - pc[1]);
-            ctx.clip();
+            tgt.beginPath();
+            tgt.rect(pc[0], pc[1], pc[2] - pc[0], pc[3] - pc[1]);
+            tgt.clip();
           }
           const cr = dl.clip[i] > 0 ? dl.clips[dl.clip[i] - 1] : null;
           if (cr) {
             const cx0 = A.ax * cr.x0 + A.bx, cy0 = A.ay * cr.y0 + A.by;
-            ctx.beginPath();
-            ctx.rect(cx0, cy0, A.ax * (cr.x1 - cr.x0), A.ay * (cr.y1 - cr.y0));
-            ctx.clip();
+            tgt.beginPath();
+            tgt.rect(cx0, cy0, A.ax * (cr.x1 - cr.x0), A.ay * (cr.y1 - cr.y0));
+            tgt.clip();
+            for (let q = 0; q < cr.pn; q++) {
+              tgt.beginPath();
+              traceClipPath(tgt, dl, cr.ps + q, A);
+              tgt.clip(dl.cpEvenodd[cr.ps + q] === 1 ? "evenodd" : "nonzero");
+            }
           }
           curState = st;
           curPaint = -1;
           curAlpha = 1;
+          tgt.globalAlpha = 1;
         }
         const pi = dl.paint[i], pt = dl.paints[pi];
-        const canBatch = kd !== 2 && pt.opaque && alpha === 1 && (ov ? isOpaqueHex(pal[ov - 1]) : !pt.fill || !pt.stroke || pt.fill === pt.stroke);
+        const canBatch = kd !== 2 && !pt.grad && pt.opaque && alpha === 1 && (ov ? isOpaqueHex(pal[ov - 1]) : !pt.fill || !pt.stroke || pt.fill === pt.stroke);
         if (!(open && batch && canBatch && pi === curPaint && ov === curOv)) {
           flush();
           if (pi !== curPaint || ov !== curOv) {
@@ -5186,33 +5702,65 @@
             curOv = ov;
           }
           if (alpha !== curAlpha) {
-            ctx.globalAlpha = alpha;
+            tgt.globalAlpha = alpha;
             curAlpha = alpha;
           }
-          ctx.beginPath();
+          tgt.beginPath();
           open = true;
           batch = canBatch;
         }
+        curA = A;
         if (kd === DL_POINT) {
           const j = dl.row[i], sh = dl.shape[j];
-          tracePoint(ctx, sh, A.ax * dl.cx[j] + A.bx, A.ay * dl.cy[j] + A.by, dl.r[j] * gs[p]);
+          tracePoint(tgt, sh, A.ax * dl.cx[j] + A.bx, A.ay * dl.cy[j] + A.by, dl.r[j] * gs[p]);
         } else if (kd === DL_RECT) {
-          traceShape(ctx, dl, i, A);
+          traceShape(tgt, dl, i, A);
         } else {
-          traceShape(ctx, dl, i, A);
-          const pf = curFill;
-          if (pf && dl.closed[dl.row[i]] === 1) {
-            ctx.fillStyle = pf;
-            ctx.fill(dl.evenodd[dl.row[i]] === 1 ? "evenodd" : "nonzero");
+          traceShape(tgt, dl, i, A);
+          if (dl.closed[dl.row[i]] === 1) {
+            const rule = dl.evenodd[dl.row[i]] === 1 ? "evenodd" : "nonzero";
+            if (curGrad > 0) fillGradient(tgt, dl.gradients[curGrad - 1], A, rule);
+            else if (curFill) {
+              tgt.fillStyle = curFill;
+              tgt.fill(rule);
+            }
           }
-          if (curStroke && pt.width > 0) ctx.stroke();
+          if (curStroke && pt.width > 0) tgt.stroke();
           open = false;
         }
         if (!batch) flush();
       }
       flush();
-      ctx.restore();
+      tgt.restore();
+      if (open_.length) closeTo(0);
       ctx.globalAlpha = 1;
+    }
+    const layerPool = [];
+    function exportMarksImage(scale) {
+      const dl = ws.dl;
+      if (!ws.rasterMode || !dl || !dl.exact || !ws.vb || !ws.vb0) return null;
+      const vb0 = ws.vb0;
+      const az = ws.axisZoomActive && ws.azPanels.length > 0;
+      const frame = az ? vb0 : ws.vb;
+      let s = Math.max(2, scale || 1);
+      const MAX_PX = 32e6;
+      if (vb0.w * vb0.h * s * s > MAX_PX) s = Math.sqrt(MAX_PX / (vb0.w * vb0.h));
+      const W = Math.max(1, Math.round(vb0.w * s)), H = Math.max(1, Math.round(vb0.h * s));
+      const c = document.createElement("canvas");
+      const ctx = typeof c.getContext === "function" ? c.getContext("2d") : null;
+      if (!ctx) return null;
+      c.width = W;
+      c.height = H;
+      const styled = ws.msActive && !!ws.msFlags && !!ws.msColor;
+      if (dl.n) paintList(ctx, dl, W, H, listLayout(dl, W, H), styled);
+      let href = "";
+      try {
+        href = c.toDataURL("image/png");
+      } catch (e) {
+        return null;
+      }
+      if (!/^data:image\/png/.test(href || "")) return null;
+      return { href, x: frame.x, y: frame.y, w: frame.w, h: frame.h };
     }
     function withAlphaOf(c, ref) {
       if (/^#[0-9a-fA-F]{6}$/.test(c) && /^#[0-9a-fA-F]{8}$/.test(ref)) {
@@ -5295,7 +5843,7 @@
     function setHover(k) {
       setHoverKeys(ws.fx.linkedKeys(k));
     }
-    return { ensureCanvas, clearPointData, sampleBaseRaster, drawPoints, clearGroup, drawSelFeedback, setHoverKeys, setHover, showMarksLayer };
+    return { ensureCanvas, clearPointData, sampleBaseRaster, drawPoints, clearGroup, drawSelFeedback, setHoverKeys, setHover, showMarksLayer, exportMarksImage };
   }
 
   // srcts/ink.ts
@@ -5539,6 +6087,26 @@
       ws.el.setAttribute("tabindex", "0");
       ws.el.addEventListener("keydown", ws.fx.onKey);
     }
+    function loadFlagged(f) {
+      const dl = ws.dl;
+      if (!dl || !dl.covered || !dl.nRuns) return;
+      const hrefs = asColumn(f.runs).map(String);
+      if (hrefs.length !== dl.nRuns) return;
+      const imgs = [];
+      let left = hrefs.length;
+      for (let k = 0; k < hrefs.length; k++) {
+        const im = document.createElement("img");
+        im.onload = function() {
+          if (--left > 0 || ws.dl !== dl) return;
+          if (attachRuns(dl, imgs, hrefs, Number(f.width), Number(f.height))) {
+            ws.fx.drawPoints();
+            ws.fx.scheduleTier();
+          }
+        };
+        imgs.push(im);
+        im.src = hrefs[k];
+      }
+    }
     function renderValue(x) {
       ws.opts = Object.assign(
         // Interactive-by-default: hover/select/brush/lasso/zoom and axis-aware
@@ -5680,6 +6248,7 @@
         if (ws.rasterMode) {
           ws.fx.ensureCanvas();
           ws.fx.sampleBaseRaster();
+          if (ws.marksLayer && x.flagged) loadFlagged(x.flagged);
         } else {
           ws.fx.clearPointData();
         }
@@ -6054,11 +6623,27 @@
       const s = ws.opts.export && ws.opts.export.scale;
       return s && s > 0 ? s : 1;
     }
-    function exportSvgString() {
+    function exportSvgString(strokeK) {
       const svg = ws.svgEl.cloneNode(true);
+      inlineStateStyles(ws.svgEl, svg);
       svg.classList.remove("vellumwidget-marks-off");
-      const drawn = svg.querySelectorAll(".vellumwidget-marks");
-      for (let i = 0; i < drawn.length; i++) drawn[i].style.visibility = "";
+      const listed = ws.rasterMode ? ws.fx.exportMarksImage(exportScale()) : null;
+      if (listed) {
+        const old = svg.querySelectorAll(".vellumwidget-marks, .vellumwidget-marks-defs, .vellumwidget-detail");
+        for (let i = 0; i < old.length; i++) old[i].remove();
+        const img = document.createElementNS(SVGNS, "image");
+        img.setAttribute("class", "vellumwidget-marks-export");
+        img.setAttribute("x", String(listed.x));
+        img.setAttribute("y", String(listed.y));
+        img.setAttribute("width", String(listed.w));
+        img.setAttribute("height", String(listed.h));
+        img.setAttribute("preserveAspectRatio", "none");
+        img.setAttribute("href", listed.href);
+        svg.appendChild(img);
+      } else {
+        const drawn = svg.querySelectorAll(".vellumwidget-marks");
+        for (let i = 0; i < drawn.length; i++) drawn[i].style.visibility = "";
+      }
       if (ws.aboveEl) {
         const g = document.createElementNS(SVGNS, "g");
         g.setAttribute("class", "vellumwidget-above-export");
@@ -6071,6 +6656,17 @@
         for (let c = ws.retickLayer.firstChild; c; c = c.nextSibling) g.appendChild(c.cloneNode(true));
         svg.appendChild(g);
       }
+      if (strokeK && strokeK !== 1) {
+        const ns = svg.querySelectorAll('[vector-effect="non-scaling-stroke"]');
+        for (let i = 0; i < ns.length; i++) {
+          const w = parseFloat(ns[i].getAttribute("stroke-width") || "1");
+          ns[i].setAttribute("stroke-width", String((isFinite(w) ? w : 1) * strokeK));
+          const d = ns[i].getAttribute("stroke-dasharray");
+          if (d && d !== "none") {
+            ns[i].setAttribute("stroke-dasharray", d.split(/[\s,]+/).filter(Boolean).map((v) => String(parseFloat(v) * strokeK)).join(" "));
+          }
+        }
+      }
       return new XMLSerializer().serializeToString(svg);
     }
     function saveSvg() {
@@ -6080,7 +6676,7 @@
     }
     function toCanvas(then, fail) {
       if (!ws.svgEl) return fail();
-      const s = exportSvgString();
+      const s = exportSvgString(exportScale());
       const url = URL.createObjectURL(new Blob([s], { type: "image/svg+xml;charset=utf-8" }));
       const img = new Image();
       img.onload = function() {
@@ -6550,6 +7146,12 @@
           },
           markTier: function() {
             return ws.markTier;
+          },
+          listExact: function() {
+            return ws.dl ? ws.dl.exact : null;
+          },
+          runsAttached: function() {
+            return !!(ws.dl && ws.dl.runImgs);
           },
           condTags: function() {
             return Object.keys(ws.condTagElems).map(function(k) {
