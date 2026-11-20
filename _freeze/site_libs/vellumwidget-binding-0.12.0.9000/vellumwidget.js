@@ -51,8 +51,7 @@
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 6; overflow: visible;
 }
-.vellumwidget-cb-dim { fill: rgba(255,255,255,0.66); pointer-events: none; }
-@media (prefers-color-scheme: dark) { .vellumwidget-cb-dim { fill: rgba(17,24,39,0.66); } }
+.vellumwidget-cb-dim { fill: var(--vellumwidget-wash, rgba(255,255,255,0.66)); pointer-events: none; }
 .vellumwidget-cb-handle {
   fill: #ffffff; stroke: #2563eb; stroke-width: 1.5px; pointer-events: auto;
 }
@@ -72,35 +71,36 @@
   pointer-events: none; z-index: 3; overflow: visible;
 }
 .vellumwidget-crosshair-line {
-  stroke: var(--vellumwidget-crosshair-stroke, rgba(75,85,99,0.85));
+  stroke: var(--vellumwidget-crosshair-stroke, var(--vellumwidget-ink-soft, rgba(75,85,99,0.85)));
   stroke-width: 1px; stroke-dasharray: 4 3;
-}
-@media (prefers-color-scheme: dark) {
-  .vellumwidget-crosshair-line { stroke: var(--vellumwidget-crosshair-stroke, rgba(209,213,219,0.85)); }
 }
 /* Raster-mode feedback rings (hover / selection), drawn on the overlay since the
    marks are a base image with no per-element nodes. Colours reuse the same CSS
    variables as the SVG-mode highlight/selection so theming carries over. */
 .vellumwidget-fb-hov { fill: none; stroke: var(--vellumwidget-hl-stroke, #2563eb); stroke-width: 2px; }
-.vellumwidget-fb-sel { fill: none; stroke: var(--vellumwidget-selected-stroke, #111827); stroke-width: 1.6px; }
-@media (prefers-color-scheme: dark) {
-  .vellumwidget-fb-sel { stroke: var(--vellumwidget-selected-stroke, #f9fafb); }
-}
+.vellumwidget-fb-sel { fill: none; stroke: var(--vellumwidget-selected-stroke, var(--vellumwidget-ink, #111827)); stroke-width: 1.6px; }
 /* Optional hover stroke, opt-in per element (.vellumwidget-hc) or widget-wide
    (.vellumwidget-hc-all on the root). Never applied to a mark that has no hover colour,
    so a bordered shape is not clobbered on hover. Colour resolves from the nearest
-   --vellumwidget-hl-stroke (element var overrides the root var). */
+   --vellumwidget-hl-stroke (element var overrides the root var).
+   The rings use paint-order: normal (stroke over fill), so the whole ring shows
+   whether a keyed mark is one element carrying both fill and stroke (newer
+   vellum) or a fill followed by a fill="none" stroke twin (older vellum).
+   Painting the stroke under the fill, a single element's fill would hide the inner
+   half of the ring. */
 .vellumwidget-hc-all [data-key].vellumwidget-hl, [data-key].vellumwidget-hc.vellumwidget-hl {
-  stroke: var(--vellumwidget-hl-stroke); stroke-width: var(--vellumwidget-hl-width, 2px); paint-order: stroke fill;
+  stroke: var(--vellumwidget-hl-stroke); stroke-width: var(--vellumwidget-hl-width, 2px); paint-order: normal;
 }
+/* Selection / crosshair ink (--vellumwidget-ink*) is set on the root from the
+   plot's own background, not the OS colour scheme (VW-20). */
 [data-key].vellumwidget-selected {
-  stroke: var(--vellumwidget-selected-stroke, #111827);
-  stroke-width: var(--vellumwidget-selected-width, 1.4px); paint-order: stroke fill;
+  stroke: var(--vellumwidget-selected-stroke, var(--vellumwidget-ink, #111827));
+  stroke-width: var(--vellumwidget-selected-width, 1.4px); paint-order: normal;
 }
 /* Keyboard focus ring on the currently-traversed mark (a11y). */
 [data-key].vellumwidget-focus {
   stroke: var(--vellumwidget-focus-stroke, #2563eb);
-  stroke-width: var(--vellumwidget-focus-width, 2.5px); paint-order: stroke fill;
+  stroke-width: var(--vellumwidget-focus-width, 2.5px); paint-order: normal;
 }
 [data-key]:focus { outline: none; }
 [data-key]:focus-visible { outline: 2px solid var(--vellumwidget-focus-stroke, #2563eb); outline-offset: 1px; }
@@ -174,7 +174,6 @@
 .vellumwidget-toolbar button.vellumwidget-active { background: rgba(37,99,235,0.18); }
 @media (prefers-color-scheme: dark) {
   .vellumwidget-tip { background: var(--vellumwidget-tip-bg, rgba(243,244,246,0.96)); color: var(--vellumwidget-tip-fg, #111827); }
-  [data-key].vellumwidget-selected { stroke: var(--vellumwidget-selected-stroke, #f9fafb); }
   .vellumwidget-toolbar { background: rgba(31,41,55,0.9); }
   .vellumwidget-toolbar button { color: #f3f4f6; }
   .vellumwidget-toolbar button:hover { background: rgba(255,255,255,0.12); }
@@ -1238,7 +1237,9 @@
           x2Lab: null,
           y2Lab: null,
           x2Map: null,
-          y2Map: null
+          y2Map: null,
+          xTick: null,
+          yTick: null
         });
       }
       ws.azPanels = found;
@@ -1249,6 +1250,7 @@
       hideStaticAxes();
       for (let i = 0; i < ws.azPanels.length; i++) {
         const a = ws.azPanels[i];
+        adoptFurniture(a);
         const g = document.createElementNS(SVGNS, "g");
         g.setAttribute("class", "vellumwidget-retick-grid");
         a.outer.insertBefore(g, a.pan);
@@ -1428,10 +1430,125 @@
     }
     function hideStaticAxes() {
       if (!ws.svgEl) return;
-      const hide = ws.svgEl.querySelectorAll(
-        '[role="grid"], [data-vellum-panel^="axis-x"], [data-vellum-panel^="axis-y"]'
-      );
-      for (let i = 0; i < hide.length; i++) hide[i].style.display = "none";
+      const grids = ws.svgEl.querySelectorAll('[role="grid"]');
+      for (let i = 0; i < grids.length; i++) grids[i].style.display = "none";
+      const axes = ws.svgEl.querySelectorAll('[data-vellum-panel^="axis-x"], [data-vellum-panel^="axis-y"]');
+      for (let i = 0; i < axes.length; i++) {
+        const kids = axes[i].children;
+        let line = false;
+        for (let j = 0; j < kids.length; j++) if (isAxisLine(kids[j])) line = true;
+        if (!line) {
+          axes[i].style.display = "none";
+          continue;
+        }
+        for (let j = 0; j < kids.length; j++) {
+          if (!isAxisLine(kids[j])) kids[j].style.display = "none";
+        }
+      }
+    }
+    function isAxisLine(n) {
+      if (n.tagName.toLowerCase() !== "path") return false;
+      const s = pathSegments(n.getAttribute("d") || "");
+      return s !== null && s.length === 1 && (s[0][0] === s[0][2] || s[0][1] === s[0][3]);
+    }
+    function pathSegments(d) {
+      const re = /M\s*([-\d.eE]+)[\s,]+([-\d.eE]+)\s*L\s*([-\d.eE]+)[\s,]+([-\d.eE]+)\s*/g;
+      const out = [];
+      let m, end = 0;
+      const t = d.trim();
+      while ((m = re.exec(t)) !== null) {
+        if (m.index !== end) return null;
+        const v = [+m[1], +m[2], +m[3], +m[4]];
+        if (!v.every(isFinite)) return null;
+        out.push(v);
+        end = re.lastIndex;
+      }
+      return end === t.length && out.length ? out : null;
+    }
+    function adoptFurniture(a) {
+      const p = a.p;
+      const kids = Array.prototype.slice.call(a.pan.children);
+      const near = function(v, w) {
+        return Math.abs(v - w) < 0.5;
+      };
+      for (let i = 0; i < kids.length; i++) {
+        const c = kids[i];
+        if (c.hasAttribute("data-vellum-id") || c.hasAttribute("data-key")) break;
+        const role = c.getAttribute("role");
+        if (role === "grid") continue;
+        const tag = c.tagName.toLowerCase();
+        if (i === 0 && !role && (tag === "path" || tag === "rect")) {
+          c.setAttribute("data-vw-panel-bg", "");
+          a.outer.insertBefore(c, a.pan);
+          continue;
+        }
+        if (role !== "presentation" || tag !== "g") break;
+        const paths = c.children;
+        let tick = null, isX = false;
+        for (let j = 0; j < paths.length && paths.length; j++) {
+          const segs = pathSegments(paths[j].getAttribute("d") || "");
+          if (!segs) {
+            tick = null;
+            break;
+          }
+          for (let k = 0; k < segs.length; k++) {
+            const s = segs[k];
+            let edge = null, len = 0, vx = false;
+            if (s[0] === s[2]) {
+              vx = true;
+              len = Math.abs(s[3] - s[1]);
+              edge = near(s[1], p.py1) || near(s[3], p.py1) ? "bottom" : near(s[1], p.py0) || near(s[3], p.py0) ? "top" : null;
+            } else if (s[1] === s[3]) {
+              len = Math.abs(s[2] - s[0]);
+              edge = near(s[0], p.px0) || near(s[2], p.px0) ? "left" : near(s[0], p.px1) || near(s[2], p.px1) ? "right" : null;
+            }
+            if (!edge || !(len > 0) || tick && tick.edge !== edge) {
+              tick = null;
+              break;
+            }
+            if (!tick) {
+              isX = vx;
+              tick = {
+                stroke: paths[j].getAttribute("stroke") || ws.axisStyle.textFill,
+                width: parseFloat(paths[j].getAttribute("stroke-width") || "") || 1,
+                len,
+                edge
+              };
+            } else if (len > tick.len) tick.len = len;
+          }
+          if (!tick) break;
+        }
+        if (!tick) break;
+        c.style.display = "none";
+        if (isX) {
+          if (!a.xTick || tick.len > a.xTick.len) a.xTick = tick;
+        } else if (!a.yTick || tick.len > a.yTick.len) a.yTick = tick;
+      }
+    }
+    function tickLine(ts, at, p) {
+      const l = document.createElementNS(SVGNS, "line");
+      let x1 = at, x2 = at, y1 = at, y2 = at;
+      if (ts.edge === "bottom") {
+        y1 = p.py1;
+        y2 = p.py1 - ts.len;
+      } else if (ts.edge === "top") {
+        y1 = p.py0;
+        y2 = p.py0 + ts.len;
+      } else if (ts.edge === "left") {
+        x1 = p.px0;
+        x2 = p.px0 + ts.len;
+      } else {
+        x1 = p.px1;
+        x2 = p.px1 - ts.len;
+      }
+      l.setAttribute("x1", String(x1));
+      l.setAttribute("y1", String(y1));
+      l.setAttribute("x2", String(x2));
+      l.setAttribute("y2", String(y2));
+      l.setAttribute("stroke", ts.stroke);
+      l.setAttribute("stroke-width", String(ts.width));
+      l.setAttribute("class", "vellumwidget-retick-tick");
+      return l;
     }
     function gridLine(x1, y1, x2, y2) {
       const l = document.createElementNS(SVGNS, "line");
@@ -1478,6 +1595,7 @@
       if (!grid || !layer) return;
       while (grid.firstChild) grid.removeChild(grid.firstChild);
       const t = ws.fx.azT(a);
+      const ticks_ = [];
       if (p.x && p.px1 !== p.px0) {
         const ax = p.x;
         const k = (ax.native_hi - ax.native_lo) / (p.px1 - p.px0);
@@ -1489,6 +1607,7 @@
           const sx = t.sx * px + t.tx;
           if (!isFinite(sx) || sx < p.px0 - 0.5 || sx > p.px1 + 0.5) continue;
           grid.appendChild(gridLine(sx, p.py0, sx, p.py1));
+          if (a.xTick) ticks_.push(tickLine(a.xTick, sx, p));
           if (a.xLab) {
             const lab = axisLabel(ticks[i].label, sx, a.xLab.pos, a.xLab.anchor, a.xLab.baseline);
             if (a.xLab.gap > 0) wrapLabel(lab, ticks[i].label, sx, a.xLab.gap);
@@ -1515,6 +1634,7 @@
           const sy = t.sy * py + t.ty;
           if (!isFinite(sy) || sy < p.py0 - 0.5 || sy > p.py1 + 0.5) continue;
           grid.appendChild(gridLine(p.px0, sy, p.px1, sy));
+          if (a.yTick) ticks_.push(tickLine(a.yTick, sy, p));
           if (a.yLab) {
             layer.appendChild(axisLabel(ticks[i].label, a.yLab.pos, sy, a.yLab.anchor, a.yLab.baseline));
           }
@@ -1528,8 +1648,229 @@
           }
         }
       }
+      for (let i = 0; i < ticks_.length; i++) grid.appendChild(ticks_[i]);
     }
     return { setupAxisZoom, applyPanTransforms, retick };
+  }
+
+  // srcts/binds.ts
+  var UNIT_SECONDS = { day: 86400, second: 1 };
+  function channelToNative(ch, src, dst) {
+    if (dst.type === "discrete") {
+      if (!ch.levels) return null;
+      const levels = dst.levels != null ? asColumn(dst.levels).map(String) : [];
+      let lo = Infinity, hi = -Infinity;
+      for (let i = 0; i < ch.levels.length; i++) {
+        const k = levels.indexOf(String(ch.levels[i]));
+        if (k < 0) continue;
+        lo = Math.min(lo, k + 1 - 0.5);
+        hi = Math.max(hi, k + 1 + 0.5);
+      }
+      return isFinite(lo) && isFinite(hi) ? [lo, hi] : null;
+    }
+    if (ch.levels) return null;
+    let a = ch.lo, b = ch.hi;
+    const su = src && src.time_unit ? UNIT_SECONDS[src.time_unit] : void 0;
+    const du = dst.time_unit ? UNIT_SECONDS[dst.time_unit] : void 0;
+    if (su && du && su !== du) {
+      a = a * su / du;
+      b = b * su / du;
+    }
+    const na = dataToNative(dst, a), nb = dataToNative(dst, b);
+    if (!isFinite(na) || !isFinite(nb) || na === nb) return null;
+    return [Math.min(na, nb), Math.max(na, nb)];
+  }
+  function boundPan(p, t, b) {
+    const out = { sx: t.sx, sy: t.sy, tx: t.tx, ty: t.ty };
+    if (b.h && p.x && p.px1 !== p.px0 && p.x.native_hi !== p.x.native_lo) {
+      const ax = p.x;
+      const rising = ax.native_hi > ax.native_lo;
+      const d0 = rising ? b.h[0] : b.h[1], d1 = rising ? b.h[1] : b.h[0];
+      const k = (p.px1 - p.px0) / (ax.native_hi - ax.native_lo);
+      const k2 = (p.px1 - p.px0) / (d1 - d0);
+      out.sx = k2 / k;
+      out.tx = p.px0 * (1 - out.sx) + (ax.native_lo - d0) * k2;
+    }
+    if (b.v && p.y && p.py1 !== p.py0 && p.y.native_hi !== p.y.native_lo) {
+      const ay = p.y;
+      const rising = ay.native_hi > ay.native_lo;
+      const d0 = rising ? b.v[0] : b.v[1], d1 = rising ? b.v[1] : b.v[0];
+      const k = (p.py1 - p.py0) / (ay.native_hi - ay.native_lo);
+      const k2 = (p.py1 - p.py0) / (d1 - d0);
+      out.sy = k2 / k;
+      out.ty = p.py0 * (1 - out.sy) + (d1 - ay.native_hi) * k2;
+    }
+    return out;
+  }
+  function sameBounds(a, b) {
+    const ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    const eq = (x, y) => !x && !y || !!x && !!y && Math.abs(x[0] - y[0]) < 1e-9 && Math.abs(x[1] - y[1]) < 1e-9;
+    for (let i = 0; i < ka.length; i++) {
+      const p = a[ka[i]], q = b[ka[i]];
+      if (!q || !eq(p.h, q.h) || !eq(p.v, q.v)) return false;
+    }
+    return true;
+  }
+
+  // srcts/features/bindScales.ts
+  function isScalesBound(sel) {
+    return sel.kind === "interval" && sel.bind === "scales";
+  }
+  function bindScalesFeature(ws) {
+    function cellZoom() {
+      const ix = ws.interactions;
+      if (!ws.axisZoomActive || !ix) return false;
+      const binds = ix.binds ? asColumn(ix.binds) : [];
+      const sels = ix.selections ? asColumn(ix.selections).filter(isScalesBound) : [];
+      if (!binds.length && !sels.length) return false;
+      let first;
+      for (let i = 0; i < ws.azPanels.length; i++) {
+        const c = ws.azPanels[i].p.cell;
+        if (c == null) return false;
+        if (first === void 0) first = c;
+        else if (c !== first) return true;
+      }
+      return false;
+    }
+    function activeCell() {
+      if (ws.activeCell != null) return ws.activeCell;
+      const c = ws.azPanels.length ? ws.azPanels[0].p.cell : null;
+      return c == null ? null : c;
+    }
+    function viewFor(a) {
+      const c = a.p.cell;
+      if (c == null || c === activeCell() || !cellZoom()) return ws.vb;
+      return ws.cellViews[c] || ws.vb0;
+    }
+    function copyVb(v) {
+      return { x: v.x, y: v.y, w: v.w, h: v.h };
+    }
+    function focusCell(cell) {
+      if (cell == null || !cellZoom()) return;
+      const cur = activeCell();
+      if (cell === cur || !ws.vb0) return;
+      if (cur != null && ws.vb) ws.cellViews[cur] = copyVb(ws.vb);
+      const next = ws.cellViews[cell];
+      ws.vb = next ? copyVb(next) : copyVb(ws.vb0);
+      delete ws.cellViews[cell];
+      ws.activeCell = cell;
+    }
+    function focusCellAt(clientX, clientY) {
+      if (!cellZoom()) return;
+      const u = ws.fx.toUser(clientX, clientY);
+      const a = ws.fx.azNearest(u.x, u.y);
+      if (a) focusCell(a.p.cell);
+    }
+    function anyCellZoomed() {
+      if (!ws.vb0) return false;
+      for (const c in ws.cellViews) if (isZoomedIn(ws.cellViews[c], ws.vb0)) return true;
+      return false;
+    }
+    function viewOfPanel(p) {
+      const az = ws.azPanels.filter((q) => q.p.name === p.name)[0];
+      return az ? viewFor(az) : ws.vb;
+    }
+    function inCells(p, cells) {
+      if (!cells || !cells.length) return true;
+      return p.cell != null && cells.indexOf(p.cell) >= 0;
+    }
+    function panelByName(name) {
+      for (let i = 0; i < ws.panels.length; i++) if (ws.panels[i].name === name) return ws.panels[i];
+      return null;
+    }
+    function boundT(a, t) {
+      const b = ws.scaleBinds[a.p.name];
+      return b ? boundPan(a.p, t, b) : t;
+    }
+    function applyScaleBinds() {
+      const ix = ws.interactions;
+      if (!ix || !ix.binds || !ws.panels.length || ws.bindGuard) return;
+      const next = {};
+      const by = {};
+      const binds = asColumn(ix.binds);
+      for (let i = 0; i < binds.length; i++) {
+        const bd = binds[i];
+        const iv = ws.intervals[bd.selection];
+        const r = iv && iv.range;
+        const ch = r ? r[bd.aes] : void 0;
+        if (!r || !ch) continue;
+        const src = panelByName(r.panel);
+        const srcAx = src ? axisForEncoding(src, bd.aes) : null;
+        const cells = bd.cell != null ? [bd.cell] : null;
+        for (let j = 0; j < ws.panels.length; j++) {
+          const p = ws.panels[j];
+          if (p.name === r.panel || !inCells(p, cells)) continue;
+          const hit = axisForEncoding(p, bd.aes);
+          if (!hit) continue;
+          const dom = channelToNative(ch, srcAx ? srcAx.ax : void 0, hit.ax);
+          if (!dom) continue;
+          const b = next[p.name] || (next[p.name] = {});
+          if (hit.horizontal) b.h = dom;
+          else b.v = dom;
+          by[p.name] = bd.selection;
+        }
+      }
+      if (sameBounds(next, ws.scaleBinds)) return;
+      ws.scaleBinds = next;
+      ws.scaleBoundBy = by;
+      if (!ws.axisZoomActive) return;
+      ws.bindGuard = true;
+      try {
+        ws.fx.applyViewBox();
+      } finally {
+        ws.bindGuard = false;
+      }
+    }
+    function visibleRect(p) {
+      if (!ws.vb || !ws.vb0) return null;
+      let a, b;
+      const az = ws.azPanels.filter((q) => q.p.name === p.name)[0];
+      if (ws.axisZoomActive && az) {
+        const t = ws.fx.azT(az);
+        if (!t.sx || !t.sy) return null;
+        a = { x: (p.px0 - t.tx) / t.sx, y: (p.py0 - t.ty) / t.sy };
+        b = { x: (p.px1 - t.tx) / t.sx, y: (p.py1 - t.ty) / t.sy };
+      } else {
+        a = panToView(ws.vb, ws.vb0, p.px0, p.py0);
+        b = panToView(ws.vb, ws.vb0, p.px1, p.py1);
+      }
+      return { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) };
+    }
+    function syncScaleSelections() {
+      const ix = ws.interactions;
+      if (!ix || !ix.selections || ws.bindGuard) return;
+      const sels = asColumn(ix.selections).filter(isScalesBound);
+      if (!sels.length) return;
+      let changed = false;
+      for (let i = 0; i < sels.length; i++) {
+        const sel = sels[i];
+        const cells = sel.cells != null ? asColumn(sel.cells) : null;
+        let src = null;
+        for (let j = 0; j < ws.panels.length && !src; j++) {
+          const p = ws.panels[j];
+          if (inCells(p, cells) && ws.scaleBoundBy[p.name] !== sel.name) src = p;
+        }
+        const prev = ws.intervals[sel.name];
+        const v = src ? viewOfPanel(src) : null;
+        const zoomed = !!v && !!ws.vb0 && isZoomedIn(v, ws.vb0);
+        const rect = zoomed && src ? visibleRect(src) : null;
+        const r = rect && src ? intervalRangeOf(src, rect, selEncodings(sel)) : null;
+        if (!r) {
+          if (prev) {
+            delete ws.intervals[sel.name];
+            changed = true;
+          }
+          continue;
+        }
+        const same = prev && prev.range && JSON.stringify(prev.range) === JSON.stringify(r);
+        if (same) continue;
+        ws.intervals[sel.name] = { keys: intervalKeys(ws.elements, r), range: r };
+        changed = true;
+      }
+      if (changed) ws.fx.reevaluateInteractions();
+    }
+    return { applyScaleBinds, syncScaleSelections, boundT, viewFor, focusCell, focusCellAt, anyCellZoomed };
   }
 
   // srcts/features/colorbar.ts
@@ -1815,7 +2156,7 @@
       return best;
     }
     function azT(a) {
-      return conjugatePan(viewToPan(ws.vb || ws.vb0, ws.vb0), a.ax, a.bx, a.ay, a.by);
+      return ws.fx.boundT(a, conjugatePan(viewToPan(ws.fx.viewFor(a) || ws.vb0, ws.vb0), a.ax, a.bx, a.ay, a.by));
     }
     function azBaseToScene(x, y) {
       const a = azNearest(x, y);
@@ -2125,6 +2466,7 @@
     function reevaluateInteractions() {
       applyConditions();
       applyFilters();
+      ws.fx.applyScaleBinds();
     }
     return { setupInteractions, reevaluateInteractions };
   }
@@ -2405,7 +2747,15 @@
   function intervalFeature(ws) {
     function rectIntervalSels() {
       const sels = ws.interactions && ws.interactions.selections || [];
-      return sels.filter((s) => s.kind === "interval" && s.region !== "lasso");
+      return sels.filter((s) => s.kind === "interval" && s.region !== "lasso" && !isScalesBound(s));
+    }
+    function scalesIntervals() {
+      const keep = {};
+      const sels = ws.interactions && ws.interactions.selections || [];
+      for (let i = 0; i < sels.length; i++) {
+        if (isScalesBound(sels[i]) && ws.intervals[sels[i].name]) keep[sels[i].name] = ws.intervals[sels[i].name];
+      }
+      return keep;
     }
     function lockRect(p, rect, encs) {
       if (!p) return rect;
@@ -2426,11 +2776,14 @@
       };
     }
     function applyIntervalBrush(rect) {
-      const sels = rectIntervalSels();
-      if (!sels.length) return null;
       const p = ws.fx.panelAt((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2);
+      const sels = rectIntervalSels().filter((s) => {
+        const cells = s.cells != null ? asColumn(s.cells) : [];
+        return !cells.length || !p || p.cell == null || cells.indexOf(p.cell) >= 0;
+      });
+      if (!sels.length) return null;
       const eligible = (k) => !ws.hiddenKeySet[k] && !ws.colorHiddenSet[k];
-      ws.intervals = {};
+      ws.intervals = scalesIntervals();
       const union = [];
       const seen = {};
       const ranges = {};
@@ -2495,8 +2848,9 @@
       ws.intervalEl.setAttribute("height", String(Math.max(0, b.y1 - b.y0)));
     }
     function clearIntervals() {
-      const had = Object.keys(ws.intervals).length > 0;
-      ws.intervals = {};
+      const keep = scalesIntervals();
+      const had = Object.keys(ws.intervals).length > Object.keys(keep).length;
+      ws.intervals = keep;
       ws.intervalBand = null;
       if (ws.intervalEl && ws.intervalEl.parentNode) ws.intervalEl.parentNode.removeChild(ws.intervalEl);
       return had;
@@ -3245,6 +3599,37 @@
     }
     return isFinite(minGap) ? minGap / 2 : 1;
   }
+  function finite(v) {
+    return typeof v === "number" && isFinite(v);
+  }
+  function isSeriesElem(e) {
+    if (e.mark !== "line" && e.mark !== "polygon") return false;
+    return finite(e.ixh) && finite(e.ix) && e.ixh !== e.ix || finite(e.iyh) && finite(e.iy) && e.iyh !== e.iy;
+  }
+  function dropPartialSeries(elems, keys, inside) {
+    if (!keys.length) return keys;
+    const want = {};
+    for (let i = 0; i < keys.length; i++) want[keys[i]] = true;
+    const partial = {};
+    let any = false;
+    for (let i = 0; i < elems.length; i++) {
+      const e = elems[i];
+      if (!want[e.key] || !isSeriesElem(e)) continue;
+      if (!hasBbox(e) || !inside(e)) {
+        partial[e.key] = true;
+        any = true;
+      }
+    }
+    return any ? keys.filter(function(k) {
+      return !partial[k];
+    }) : keys;
+  }
+  function bboxInRect(e, r) {
+    return e.x0 >= r.x0 - 0.5 && e.x1 <= r.x1 + 0.5 && e.y0 >= r.y0 - 0.5 && e.y1 <= r.y1 + 0.5;
+  }
+  function bboxInPolygon(e, poly) {
+    return pointInPolygon(e.x0, e.y0, poly) && pointInPolygon(e.x1, e.y0, poly) && pointInPolygon(e.x0, e.y1, poly) && pointInPolygon(e.x1, e.y1, poly);
+  }
 
   // srcts/features/picking.ts
   function pickingFeature(ws) {
@@ -3406,7 +3791,15 @@
       }
       return out;
     }
-    return { buildSpatialIndex, buildGeometry, distToElem, buildHoverAxis, nearestAxisKey, columnKeys, nearestKeyAt, brushKeysIn, lassoKeysIn };
+    function brushSelectable(keys, region) {
+      const inside = Array.isArray(region) ? function(e) {
+        return bboxInPolygon(e, region);
+      } : function(e) {
+        return bboxInRect(e, region);
+      };
+      return dropPartialSeries(ws.elements, keys, inside);
+    }
+    return { buildSpatialIndex, buildGeometry, distToElem, buildHoverAxis, nearestAxisKey, columnKeys, nearestKeyAt, brushKeysIn, lassoKeysIn, brushSelectable };
   }
 
   // srcts/features/pointer.ts
@@ -3564,6 +3957,7 @@
         const pu = ws.fx.toUser(ev.clientX, ev.clientY);
         ws.anchorPanel = ws.fx.azNearest(pu.x, pu.y);
       }
+      if (ws.anchorPanel) ws.fx.focusCell(ws.anchorPanel.p.cell);
       const u = ws.fx.toAnchor(ev.clientX, ev.clientY);
       ws.down = { cx: ev.clientX, cy: ev.clientY, ux: u.x, uy: u.y };
       ws.dragging = "";
@@ -3599,7 +3993,7 @@
         const iv = ws.fx.applyIntervalBrush(rect);
         ws.lastBrush = iv ? iv.band : rect;
         const hitKeys = iv ? iv.keys : ws.fx.dropInert(ws.fx.brushKeysIn(rect));
-        if (ws.opts.select) ws.fx.setSelection(hitKeys);
+        if (ws.opts.select) ws.fx.setSelection(ws.fx.brushSelectable(hitKeys, iv ? iv.band : rect));
         else if (iv) ws.fx.reevaluateInteractions();
         ws.fx.shinyInput("brush", Object.assign(
           { keys: hitKeys, x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 },
@@ -3613,7 +4007,7 @@
         if (poly.length >= 3) {
           const b = polyBounds(poly);
           ws.lastBrush = b;
-          if (ws.opts.select) ws.fx.setSelection(hitKeys);
+          if (ws.opts.select) ws.fx.setSelection(ws.fx.brushSelectable(hitKeys, poly));
           ws.fx.shinyInput("brush", Object.assign(
             { keys: hitKeys, x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, lasso: true },
             ws.fx.brushDataFields(b)
@@ -3659,6 +4053,7 @@
     function onWheel(ev) {
       if (!ws.opts.zoom || !ws.vb) return;
       ev.preventDefault();
+      ws.fx.focusCellAt(ev.clientX, ev.clientY);
       const u = ws.fx.toAnchor(ev.clientX, ev.clientY);
       const factor = ev.deltaY < 0 ? 1.2 : 1 / 1.2;
       ws.vb = zoomViewBox(ws.vb, factor, u.x, u.y);
@@ -3936,6 +4331,63 @@
     return { ensureCanvas, clearPointData, sampleBaseRaster, drawPoints, clearGroup, drawSelFeedback, setHoverKeys, setHover };
   }
 
+  // srcts/ink.ts
+  function parseColor(s) {
+    if (!s) return null;
+    const t = s.trim().toLowerCase();
+    if (t === "white") return [255, 255, 255, 1];
+    if (t === "black") return [0, 0, 0, 1];
+    let m = /^#([0-9a-f]{3})$/.exec(t);
+    if (m) return [0, 1, 2].map((i) => parseInt(m[1][i] + m[1][i], 16)).concat(1);
+    m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/.exec(t);
+    if (m) {
+      const v = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+      return v.concat(m[2] ? parseInt(m[2], 16) / 255 : 1);
+    }
+    m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?\s*\)$/.exec(t);
+    if (m) {
+      let a = 1;
+      if (m[4] != null) a = /%$/.test(m[4]) ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+      const v = [+m[1], +m[2], +m[3], a];
+      return v.every(isFinite) ? v : null;
+    }
+    return null;
+  }
+  function luminance(c) {
+    const lin = c.slice(0, 3).map((v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  }
+  function isDarkBg(c) {
+    return luminance(c) < 0.25;
+  }
+  function opaqueFill(n) {
+    if (!n) return null;
+    const c = parseColor(n.getAttribute("fill"));
+    if (!c || c[3] < 0.5) return null;
+    const fo = parseFloat(n.getAttribute("fill-opacity") || "1");
+    if (isFinite(fo) && fo < 0.5) return null;
+    return c;
+  }
+  function sceneBackgrounds(svg) {
+    let panel = opaqueFill(svg.querySelector("[data-vw-panel-bg]"));
+    if (!panel) {
+      const pan = svg.querySelector("[data-vellum-pan]");
+      const first = pan ? pan.firstElementChild : null;
+      if (first && !first.getAttribute("role") && /^(path|rect)$/i.test(first.tagName)) panel = opaqueFill(first);
+    }
+    let plot = opaqueFill(svg.querySelector('[data-vellum-panel="plot-background"] path, [data-vellum-panel="plot-background"] rect'));
+    if (!plot) {
+      for (let i = 0; i < svg.children.length && !plot; i++) {
+        const c = svg.children[i];
+        if (c.tagName.toLowerCase() === "rect") plot = opaqueFill(c);
+      }
+    }
+    return { panel, plot };
+  }
+
   // srcts/shiny.ts
   function dispatchProxyCall(msg, findInstance) {
     if (!msg || msg.id == null) return;
@@ -4005,6 +4457,13 @@
       setRoot("--vellumwidget-tip-fg", s.tipFg);
       setRoot("--vellumwidget-tip-fontsize", s.tipFontSize);
       setRoot("--vellumwidget-tip-maxwidth", s.tipMaxWidth);
+      const bg = ws.svgEl ? sceneBackgrounds(ws.svgEl) : { panel: null, plot: null };
+      const panelBg = bg.panel || bg.plot, plotBg = bg.plot || bg.panel;
+      const darkPanel = !!panelBg && isDarkBg(panelBg);
+      ws.el.style.setProperty("--vellumwidget-ink", darkPanel ? "#f9fafb" : "#111827");
+      ws.el.style.setProperty("--vellumwidget-ink-soft", darkPanel ? "rgba(209,213,219,0.85)" : "rgba(75,85,99,0.85)");
+      ws.el.style.setProperty("--vellumwidget-wash", plotBg && isDarkBg(plotBg) ? "rgba(17,24,39,0.66)" : "rgba(255,255,255,0.66)");
+      ws.el.classList.toggle("vellumwidget-dark-panel", darkPanel);
       if (s.hoverColor != null && s.hoverColor !== "") {
         ws.el.style.setProperty("--vellumwidget-hl-stroke", s.hoverColor);
         ws.el.classList.add("vellumwidget-hc-all");
@@ -4028,6 +4487,12 @@
           if (e.legend_for != null) n.classList.add("vellumwidget-legend");
         }
       }
+    }
+    function defaultMode() {
+      const modes = ws.fx.availableModes();
+      const ivs = asColumn(ws.interactions && ws.interactions.selections || []).filter((s) => s.kind === "interval");
+      if (ivs.length && ivs.every(isScalesBound) && modes.indexOf("pan") >= 0) return "pan";
+      return modes[0] || "brush";
     }
     function wire(svg) {
       svg.addEventListener("pointermove", ws.fx.onHoverMove);
@@ -4152,6 +4617,8 @@
           if (w && h) ws.vb0 = { x: 0, y: 0, w, h };
         }
         ws.vb = ws.vb0 ? { x: ws.vb0.x, y: ws.vb0.y, w: ws.vb0.w, h: ws.vb0.h } : null;
+        ws.cellViews = {};
+        ws.activeCell = null;
         ws.fx.hideHighlightOverlay();
         ws.rasterMode = !!ws.opts.raster;
         ws.largeDim = !ws.rasterMode && ws.elements.length > DIM_OVERLAY_MIN;
@@ -4183,7 +4650,7 @@
         ws.fx.setupAxisZoom();
         ws.xZoom = !!ws.opts.navigator && !ws.rasterMode;
         ws.fx.applyAspect();
-        ws.fx.setMode(ws.fx.availableModes()[0] || "brush");
+        ws.fx.setMode(defaultMode());
         ws.tip.classList.toggle("vellumwidget-tip-sticky", !!ws.opts.tooltipSticky);
         applyStyling();
         ws.fx.applyLegend();
@@ -4680,7 +5147,15 @@
     }
     function reportView() {
       if (!ws.vb) return;
-      const payload = { x: ws.vb.x, y: ws.vb.y, w: ws.vb.w, h: ws.vb.h, zoomed: ws.vb0 ? isZoomedIn(ws.vb, ws.vb0) : false };
+      const payload = {
+        x: ws.vb.x,
+        y: ws.vb.y,
+        w: ws.vb.w,
+        h: ws.vb.h,
+        // Per-cell zoom (VW-18): `x`..`h` are the active cell's view; zoomed if any cell is.
+        zoomed: ws.vb0 ? isZoomedIn(ws.vb, ws.vb0) || ws.fx.anyCellZoomed() : false
+      };
+      if (ws.axisZoomActive && Object.keys(ws.scaleBinds).length) payload.bound = Object.assign({}, ws.scaleBoundBy);
       if (ws.panels.length) {
         const per = {};
         for (let i = 0; i < ws.panels.length; i++) per[ws.panels[i].name] = panelRange(i);
@@ -4691,6 +5166,7 @@
         }
       }
       ws.fx.shinyInput("zoom", payload);
+      ws.fx.syncScaleSelections();
       if (ws.group && ws.vb0 && !ws.receivingView && ws.vb0.w && ws.vb0.h) {
         busPublishView(ws.group, ws.selfToken, {
           x: (ws.vb.x - ws.vb0.x) / ws.vb0.w,
@@ -4749,6 +5225,7 @@
     }
     function resetZoom() {
       if (ws.vb0) {
+        ws.cellViews = {};
         ws.vb = { x: ws.vb0.x, y: ws.vb0.y, w: ws.vb0.w, h: ws.vb0.h };
         applyViewBox();
       }
@@ -4758,6 +5235,7 @@
       if (ws.fx.azMulti()) {
         const a = ws.fx.azNearest((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2);
         if (a) {
+          ws.fx.focusCell(a.p.cell);
           rect = {
             x0: (rect.x0 - a.bx) / a.ax,
             x1: (rect.x1 - a.bx) / a.ax,
@@ -4881,6 +5359,11 @@
       mode: "brush",
       lastBrush: null,
       intervals: {},
+      scaleBinds: {},
+      scaleBoundBy: {},
+      bindGuard: false,
+      cellViews: {},
+      activeCell: null,
       intervalEl: null,
       intervalBand: null,
       lassoPts: [],
@@ -4921,6 +5404,7 @@
         selectionFeature(ws),
         declarativeFeature(ws),
         intervalFeature(ws),
+        bindScalesFeature(ws),
         proxyFeature(ws),
         viewportFeature(ws),
         axisZoomFeature(ws),
@@ -5000,11 +5484,15 @@
           intervals: function() {
             return ws.intervals;
           },
+          // Scale binds (bind_scale()): each bound panel's native domain + its driver.
+          scaleBinds: function() {
+            return { domains: ws.scaleBinds, by: ws.scaleBoundBy };
+          },
           brushInterval: function(rect) {
             const iv = ws.fx.applyIntervalBrush(rect);
             if (!iv) return null;
             ws.lastBrush = iv.band;
-            if (ws.opts.select) ws.fx.setSelection(iv.keys);
+            if (ws.opts.select) ws.fx.setSelection(ws.fx.brushSelectable(iv.keys, iv.band));
             else ws.fx.reevaluateInteractions();
             return iv;
           },
@@ -5059,7 +5547,7 @@
             let n = 0;
             for (let i = 0; i < ws.azPanels.length; i++) {
               const g = ws.azPanels[i].grid;
-              if (g) n += g.querySelectorAll("line").length;
+              if (g) n += g.querySelectorAll("line:not(.vellumwidget-retick-tick)").length;
             }
             return n;
           },
@@ -5086,8 +5574,17 @@
             const nodes = ws.svgEl.querySelectorAll('[role="grid"], [data-vellum-panel^="axis-x"], [data-vellum-panel^="axis-y"]');
             if (!nodes.length) return null;
             return Array.prototype.every.call(nodes, function(n) {
-              return n.style.display === "none";
+              if (n.style.display === "none") return true;
+              if (n.getAttribute("role") === "grid") return false;
+              return Array.prototype.every.call(n.children, function(c) {
+                return c.style.display === "none" || c.tagName.toLowerCase() === "path";
+              });
             });
+          },
+          focusCell: ws.fx.focusCell,
+          resetZoom: ws.fx.resetZoom,
+          activeCell: function() {
+            return ws.activeCell;
           },
           setView: function(nvb) {
             ws.vb = { x: nvb.x, y: nvb.y, w: nvb.w, h: nvb.h };
@@ -5116,6 +5613,12 @@
     distToSegment2,
     distToGeom,
     brushKeys,
+    parseColor,
+    luminance,
+    isDarkBg,
+    sceneBackgrounds,
+    dropPartialSeries,
+    isSeriesElem,
     nearestKey,
     zoomViewBox,
     parseViewBox,
@@ -5147,6 +5650,8 @@
     viewToPan,
     panToView,
     conjugatePan,
+    boundPan,
+    channelToNative,
     niceTicks,
     fmtTick,
     dataToNative,
