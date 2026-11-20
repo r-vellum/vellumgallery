@@ -66,8 +66,10 @@ vg(p_wrap, "facets-label-wrap")
 Colour is shared across panels by default, so one legend covers the figure.
 When each panel holds its own set of categories, `resolve_scale(color =
 "independent")` trains the colour scale per panel, spending the whole palette
-on that panel's levels, and gives each panel its own legend, titled with its
-strip.
+on that panel's levels, and draws each panel's legend right beside it. To
+collect them in the legend area instead, give the guide a side, e.g.
+`guides(color = guide_legend(position = "right"))`; each legend is then titled
+with its panel's strip.
 
 ```{r}
 p_indep <- vplot(mtcars, width = 8, height = 3.4) |>
