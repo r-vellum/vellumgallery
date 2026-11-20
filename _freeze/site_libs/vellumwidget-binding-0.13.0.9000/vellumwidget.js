@@ -41,6 +41,14 @@
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 2; display: none;
 }
+/* Paint-order split (VW-21): the furniture drawn after the marks (a reference
+   line or annotation added after the points), over the marks canvas and under
+   the re-ticked labels and rings. Never a pointer target, so picking still
+   reaches the marks beneath. */
+.vellumwidget-above-layer {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 2; overflow: hidden;
+}
 .vellumwidget-dim-layer {
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 5; overflow: visible;
@@ -229,35 +237,90 @@
     if (v == null) return [];
     return Array.isArray(v) ? v : [v];
   }
+  function decodeColumn(v, n) {
+    if (v == null) return null;
+    if (typeof v === "object" && !Array.isArray(v)) {
+      const o = v;
+      if (o.at !== void 0 && o.v !== void 0) {
+        const at = asColumn(o.at);
+        const vals = asColumn(o.v);
+        const out = new Array(n).fill(null);
+        for (let i = 0; i < at.length; i++) out[at[i]] = vals[i];
+        return out;
+      }
+      if (o.levels !== void 0 && o.rv !== void 0 && o.rl !== void 0) {
+        const levels = asColumn(o.levels);
+        const rv = asColumn(o.rv), rl = asColumn(o.rl);
+        const out = new Array(n);
+        let k = 0;
+        for (let r = 0; r < rv.length; r++) {
+          const val = rv[r] < 0 ? null : levels[rv[r]];
+          for (let m = 0; m < rl[r]; m++) out[k++] = val;
+        }
+        return out;
+      }
+      if (o.levels !== void 0 && o.codes !== void 0) {
+        const levels = asColumn(o.levels);
+        const codes = asColumn(o.codes);
+        const out = new Array(codes.length);
+        for (let i = 0; i < codes.length; i++) {
+          const c = codes[i];
+          out[i] = c == null ? null : levels[c];
+        }
+        return out;
+      }
+    }
+    return asColumn(v);
+  }
+  function decodeKeys(v) {
+    if (v != null && typeof v === "object" && !Array.isArray(v) && "delta" in v) {
+      const o = v;
+      const delta = asColumn(o.delta), at = asColumn(o.at), other = asColumn(o.v);
+      const n = delta.length + at.length;
+      const out = new Array(n);
+      let j = 0, a = 0, run = 0;
+      for (let i = 0; i < n; i++) {
+        if (a < at.length && at[a] === i) {
+          out[i] = String(other[a++]);
+          continue;
+        }
+        run += delta[j++];
+        out[i] = String(run);
+      }
+      return out;
+    }
+    return asColumn(v).map(String);
+  }
   function normalizeElements(raw) {
     if (raw == null) return [];
     if (Array.isArray(raw)) return raw;
     const c = raw;
-    const key = asColumn(c.key);
+    const key = decodeKeys(c.key);
     const n = key.length;
     if (!n) return [];
     const x0 = asColumn(c.x0);
     const y0 = asColumn(c.y0);
     const x1 = asColumn(c.x1);
     const y1 = asColumn(c.y1);
-    const mark = c.mark != null ? asColumn(c.mark) : null;
-    const tooltip = c.tooltip != null ? asColumn(c.tooltip) : null;
-    const hoverGroup = c.hover_group != null ? asColumn(c.hover_group) : null;
-    const hoverColor = c.hover_color != null ? asColumn(c.hover_color) : null;
-    const selectedColor = c.selected_color != null ? asColumn(c.selected_color) : null;
-    const legendFor = c.legend_for != null ? asColumn(c.legend_for) : null;
-    const legend = c.legend != null ? asColumn(c.legend) : null;
-    const filterValue = c.filter_value != null ? asColumn(c.filter_value) : null;
-    const cond = c.cond != null ? asColumn(c.cond) : null;
-    const filt = c.filt != null ? asColumn(c.filt) : null;
-    const join = c.join != null ? asColumn(c.join) : null;
-    const source = c.source != null ? asColumn(c.source) : null;
-    const target = c.target != null ? asColumn(c.target) : null;
+    const col = (f) => decodeColumn(c[f], n);
+    const mark = col("mark");
+    const tooltip = col("tooltip");
+    const hoverGroup = col("hover_group");
+    const hoverColor = col("hover_color");
+    const selectedColor = col("selected_color");
+    const legendFor = col("legend_for");
+    const legend = col("legend");
+    const filterValue = col("filter_value");
+    const cond = col("cond");
+    const filt = col("filt");
+    const join = col("join");
+    const source = col("source");
+    const target = col("target");
     const ivNum = ["ix", "ixh", "iy", "iyh"].map(
-      (f) => [f, c[f] != null ? asColumn(c[f]) : null]
+      (f) => [f, col(f)]
     );
-    const ixd = c.ixd != null ? asColumn(c.ixd) : null;
-    const iyd = c.iyd != null ? asColumn(c.iyd) : null;
+    const ixd = col("ixd");
+    const iyd = col("iyd");
     const out = new Array(n);
     for (let i = 0; i < n; i++) {
       const e = { key: String(key[i]) };
@@ -292,8 +355,8 @@
       if (source && source[i] != null) e.source = String(source[i]);
       if (target && target[i] != null) e.target = String(target[i]);
       for (let f = 0; f < ivNum.length; f++) {
-        const col = ivNum[f][1];
-        if (col && typeof col[i] === "number") e[ivNum[f][0]] = col[i];
+        const col2 = ivNum[f][1];
+        if (col2 && typeof col2[i] === "number") e[ivNum[f][0]] = col2[i];
       }
       if (ixd && ixd[i] != null) e.ixd = String(ixd[i]);
       if (iyd && iyd[i] != null) e.iyd = String(iyd[i]);
@@ -304,6 +367,256 @@
   function normalizePanels(raw) {
     if (raw == null) return [];
     return Array.isArray(raw) ? raw : [raw];
+  }
+
+  // srcts/dlist.ts
+  var DL_POINT = 0;
+  var DL_RECT = 1;
+  function b64bytes(s) {
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function dlColumn(c) {
+    const n = c ? c.n || 0 : 0;
+    const make = (len) => {
+      const t = c ? c.type : "u32";
+      return t === "f32" ? new Float32Array(len) : t === "u8" ? new Uint8Array(len) : t === "u16" ? new Uint16Array(len) : new Uint32Array(len);
+    };
+    if (!c || !n) return make(0);
+    if (c.const != null) {
+      const a = make(n);
+      a.fill(c.const);
+      return a;
+    }
+    if (c.seq != null) {
+      const s = asColumn(c.seq), a = make(n);
+      for (let i = 0; i < n; i++) a[i] = s[0] + s[1] * i;
+      return a;
+    }
+    if (c.rle != null) {
+      const v = asColumn(c.rle.values), l = asColumn(c.rle.lengths), a = make(n);
+      let o = 0;
+      for (let i = 0; i < v.length; i++) {
+        a.fill(v[i], o, o + l[i]);
+        o += l[i];
+      }
+      return a;
+    }
+    const bytes = b64bytes(c.data || "");
+    const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    if (c.type === "f32") return new Float32Array(buf, 0, n);
+    if (c.type === "u16") return new Uint16Array(buf, 0, n);
+    if (c.type === "u32") return new Uint32Array(buf, 0, n);
+    return new Uint8Array(buf, 0, n);
+  }
+  var u32 = (a) => a instanceof Uint32Array ? a : Uint32Array.from(a);
+  var f32 = (a) => a instanceof Float32Array ? a : Float32Array.from(a);
+  var u8 = (a) => a instanceof Uint8Array ? a : Uint8Array.from(a);
+  function isNa(s) {
+    return s == null || s === "NA" || s === "";
+  }
+  function opaqueHex(s) {
+    return s == null || !/^#[0-9a-fA-F]{8}$/.test(s) || /ff$/i.test(s);
+  }
+  function decodeDisplayList(raw) {
+    if (!raw || raw.format !== "vellum-display-list" || raw.version !== 1) return null;
+    const n = raw.n || 0;
+    const kind = u8(dlColumn(raw.record.kind));
+    const pt = raw.point, rc = raw.rect, pa = raw.path;
+    const dl = {
+      n,
+      kind,
+      paint: u32(dlColumn(raw.record.paint)),
+      key: u32(dlColumn(raw.record.key)),
+      flags: u8(dlColumn(raw.record.flags)),
+      clip: u32(dlColumn(raw.record.clip)),
+      panel: u32(dlColumn(raw.record.panel)),
+      row: new Uint32Array(n),
+      bx0: new Float32Array(n),
+      by0: new Float32Array(n),
+      bx1: new Float32Array(n),
+      by1: new Float32Array(n),
+      cx: f32(dlColumn(pt.cx)),
+      cy: f32(dlColumn(pt.cy)),
+      r: f32(dlColumn(pt.r)),
+      shape: u8(dlColumn(pt.shape)),
+      rx: f32(dlColumn(rc.x)),
+      ry: f32(dlColumn(rc.y)),
+      rw: f32(dlColumn(rc.w)),
+      rh: f32(dlColumn(rc.h)),
+      xy: f32(dlColumn(pa.xy)),
+      runOff: u32(dlColumn(pa.run_offset)),
+      pathOff: u32(dlColumn(pa.path_offset)),
+      closed: u8(dlColumn(pa.closed)),
+      evenodd: u8(dlColumn(pa.evenodd)),
+      paints: [],
+      clips: [],
+      keys: [],
+      panels: asColumn(raw.panels).map(String),
+      exact: true
+    };
+    const k = raw.keys;
+    if (k && typeof k === "object" && !Array.isArray(k) && "type" in k) {
+      const kc = dlColumn(k);
+      dl.keys = new Array(kc.length);
+      for (let i = 0; i < kc.length; i++) dl.keys[i] = String(kc[i]);
+    } else {
+      dl.keys = asColumn(raw.keys).map(String);
+    }
+    const P = raw.paints;
+    const fill = asColumn(P.fill), stroke = asColumn(P.stroke), sw = asColumn(P.stroke_width);
+    const dash = asColumn(P.dash), cap = asColumn(P.linecap), join = asColumn(P.linejoin);
+    for (let i = 0; i < fill.length; i++) {
+      const f = isNa(fill[i]) ? null : String(fill[i]);
+      const s = isNa(stroke[i]) ? null : String(stroke[i]);
+      const d = isNa(dash[i]) ? null : String(dash[i]).split(",").map(Number).filter((x) => isFinite(x));
+      dl.paints.push({
+        fill: f,
+        stroke: s,
+        width: Number(sw[i]) || 0,
+        dash: d && d.length ? d : null,
+        cap: cap[i] || "butt",
+        join: join[i] || "miter",
+        opaque: opaqueHex(f) && opaqueHex(s)
+      });
+    }
+    if (raw.clips) {
+      const x0 = asColumn(raw.clips.x0), y0 = asColumn(raw.clips.y0), x1 = asColumn(raw.clips.x1), y1 = asColumn(raw.clips.y1);
+      for (let i = 0; i < x0.length; i++) dl.clips.push({ x0: x0[i], y0: y0[i], x1: x1[i], y1: y1[i] });
+    }
+    let ip = 0, ir = 0, ih = 0;
+    for (let i = 0; i < n; i++) {
+      if (dl.flags[i]) dl.exact = false;
+      const kd = kind[i];
+      if (kd === DL_POINT) {
+        const j = ip++, r = dl.r[j];
+        dl.row[i] = j;
+        dl.bx0[i] = dl.cx[j] - r;
+        dl.bx1[i] = dl.cx[j] + r;
+        dl.by0[i] = dl.cy[j] - r;
+        dl.by1[i] = dl.cy[j] + r;
+      } else if (kd === DL_RECT) {
+        const j = ir++;
+        dl.row[i] = j;
+        const x = dl.rx[j], y = dl.ry[j], w = dl.rw[j], h = dl.rh[j];
+        dl.bx0[i] = Math.min(x, x + w);
+        dl.bx1[i] = Math.max(x, x + w);
+        dl.by0[i] = Math.min(y, y + h);
+        dl.by1[i] = Math.max(y, y + h);
+      } else {
+        const j = ih++;
+        dl.row[i] = j;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        const v0 = dl.runOff[dl.pathOff[j]], v1 = dl.runOff[dl.pathOff[j + 1]];
+        for (let v = v0; v < v1; v++) {
+          const x = dl.xy[2 * v], y = dl.xy[2 * v + 1];
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+        dl.bx0[i] = x0;
+        dl.by0[i] = y0;
+        dl.bx1[i] = x1;
+        dl.by1[i] = y1;
+      }
+    }
+    return dl;
+  }
+  function fillBboxes(elements, dl) {
+    const box = {};
+    for (let i = 0; i < dl.n; i++) {
+      const k = dl.keys[dl.key[i]];
+      if (k == null || !isFinite(dl.bx0[i])) continue;
+      const b = box[k];
+      if (!b) box[k] = [dl.bx0[i], dl.by0[i], dl.bx1[i], dl.by1[i]];
+      else {
+        if (dl.bx0[i] < b[0]) b[0] = dl.bx0[i];
+        if (dl.by0[i] < b[1]) b[1] = dl.by0[i];
+        if (dl.bx1[i] > b[2]) b[2] = dl.bx1[i];
+        if (dl.by1[i] > b[3]) b[3] = dl.by1[i];
+      }
+    }
+    let filled = 0;
+    for (let i = 0; i < elements.length; i++) {
+      const e = elements[i];
+      if (e.x0 != null && e.y0 != null && e.x1 != null && e.y1 != null) continue;
+      const b = box[e.key];
+      if (!b) continue;
+      e.x0 = b[0];
+      e.y0 = b[1];
+      e.x1 = b[2];
+      e.y1 = b[3];
+      filled++;
+    }
+    return filled;
+  }
+  var S3 = 0.8660254037844386;
+  var MARKER = {
+    1: [-1, -1, 1, -1, 1, 1, -1, 1],
+    2: [0, -1, S3, 0.5, -S3, 0.5],
+    3: [0, -1, 1, 0, 0, 1, -1, 0],
+    6: [0, 1, S3, -0.5, -S3, -0.5],
+    7: function() {
+      const o = [];
+      for (let k = 0; k < 10; k++) {
+        const a = -Math.PI / 2 + k * Math.PI / 5, rad = k % 2 === 0 ? 1 : 0.382;
+        o.push(rad * Math.cos(a), rad * Math.sin(a));
+      }
+      return o;
+    }()
+  };
+  function markerRing(shape) {
+    return MARKER[shape];
+  }
+  function isLineGlyph(shape) {
+    return shape === 4 || shape === 5;
+  }
+  function tracePoint(ctx, shape, x, y, r) {
+    if (shape === 0 || !MARKER[shape] && !isLineGlyph(shape)) {
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, 6.283185307179586);
+      return;
+    }
+    if (shape === 4) {
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x, y + r);
+      ctx.moveTo(x - r, y);
+      ctx.lineTo(x + r, y);
+      return;
+    }
+    if (shape === 5) {
+      const d = r * Math.SQRT1_2;
+      ctx.moveTo(x - d, y - d);
+      ctx.lineTo(x + d, y + d);
+      ctx.moveTo(x - d, y + d);
+      ctx.lineTo(x + d, y - d);
+      return;
+    }
+    const m = MARKER[shape];
+    ctx.moveTo(x + m[0] * r, y + m[1] * r);
+    for (let i = 2; i < m.length; i += 2) ctx.lineTo(x + m[i] * r, y + m[i + 1] * r);
+    ctx.closePath();
+  }
+  function traceShape(ctx, dl, i, A) {
+    const j = dl.row[i];
+    if (dl.kind[i] === DL_RECT) {
+      const x0 = A.ax * dl.rx[j] + A.bx, y0 = A.ay * dl.ry[j] + A.by;
+      ctx.rect(x0, y0, A.ax * dl.rw[j], A.ay * dl.rh[j]);
+      return;
+    }
+    const r0 = dl.pathOff[j], r1 = dl.pathOff[j + 1], closed = dl.closed[j] === 1;
+    for (let run = r0; run < r1; run++) {
+      const v0 = dl.runOff[run], v1 = dl.runOff[run + 1];
+      for (let v = v0; v < v1; v++) {
+        const x = A.ax * dl.xy[2 * v] + A.bx, y = A.ay * dl.xy[2 * v + 1] + A.by;
+        if (v === v0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      if (closed) ctx.closePath();
+    }
   }
 
   // srcts/tooltip.ts
@@ -419,7 +732,8 @@
         buildDataTable();
         return;
       }
-      if (ws.rasterMode) {
+      if (ws.fx.ringMode()) {
+        ws.svgEl.removeAttribute("aria-roledescription");
         ws.svgEl.setAttribute("role", "img");
         if (ws.opts.alt) {
           ws.svgEl.removeAttribute("aria-labelledby");
@@ -447,8 +761,9 @@
         ws.liveRegion.textContent = "";
       }
       const seen = {};
-      for (let i = 0; i < ws.elements.length; i++) {
-        const k = ws.elements[i].key;
+      const keys = ws.rasterMode ? ws.detailKeys : ws.elements.map((e) => e.key);
+      for (let i = 0; i < keys.length; i++) {
+        const k = keys[i];
         if (seen[k]) continue;
         const nodes = ws.nodesByKey[k];
         if (!nodes || !nodes.length) continue;
@@ -462,7 +777,12 @@
         ws.focusables.push({ key: k, node });
       }
       if (ws.focusables.length) ws.focusables[0].node.setAttribute("tabindex", "0");
-      buildDataTable();
+      if (ws.rasterMode) {
+        if (ws.tableEl) {
+          ws.tableEl.remove();
+          ws.tableEl = null;
+        }
+      } else buildDataTable();
     }
     return { a11yLabel, announce, focusRoving, markFocused, setupA11y };
   }
@@ -471,6 +791,8 @@
   var DIM_OVERLAY_MIN = 2e3;
   var OVERLAY_MARK_CAP = 2e3;
   var PICK_CANDIDATES = 256;
+  var LIVE_DRAW_MAX = 5e4;
+  var SETTLE_MS = 120;
   var SVGNS = "http://www.w3.org/2000/svg";
   var TIP_MULTI_CAP = 30;
   var MODE_ICON = { brush: "\u25AD", lasso: "\u25CC", pan: "\u270B" };
@@ -1200,7 +1522,7 @@
         ws.retickLayer.remove();
         ws.retickLayer = null;
       }
-      if (!ws.opts.axisZoom || ws.rasterMode || !ws.svgEl || !ws.vb0 || !ws.stage || !ws.panels.length) return;
+      if (!ws.opts.axisZoom || ws.rasterMode && ws.marksLayer !== "pans" || !ws.svgEl || !ws.vb0 || !ws.stage || !ws.panels.length) return;
       for (let i = 0; i < ws.panels.length; i++) {
         if (!axisRetickable(ws.panels[i].x) || !axisRetickable(ws.panels[i].y)) return;
       }
@@ -1223,9 +1545,11 @@
         if (!pan || !outer) return;
         const ax = (p.px1 - p.px0) / rw, ay = (p.py1 - p.py0) / rh;
         if (!(ax > 0) || !(ay > 0)) return;
+        const mirror = ws.aboveEl ? ws.aboveEl.querySelector('[data-vellum-pan="' + cssEscape(p.name) + '"]') : null;
         found.push({
           p,
           pan,
+          mirror,
           outer,
           grid: null,
           ax,
@@ -1271,6 +1595,11 @@
         const t = ws.fx.azT(ws.azPanels[i]);
         ws.azPanels[i].pan.setAttribute("transform", ws.fx.fmtPan(t));
         setPanScaleVars(ws.azPanels[i].pan, t);
+        const m = ws.azPanels[i].mirror;
+        if (m) {
+          m.setAttribute("transform", ws.fx.fmtPan(t));
+          setPanScaleVars(m, t);
+        }
       }
     }
     function setPanScaleVars(g, t) {
@@ -1651,6 +1980,354 @@
       for (let i = 0; i < ticks_.length; i++) grid.appendChild(ticks_[i]);
     }
     return { setupAxisZoom, applyPanTransforms, retick };
+  }
+
+  // srcts/features/markState.ts
+  var MS_DIM = 1;
+  var MS_HIDDEN = 2;
+  var MS_MUTED = 4;
+  var DIM_DEFAULT = 0.28;
+  var MUTED_ALPHA = 0.12;
+  function markStateFeature(ws) {
+    let forDl = null;
+    let keyIdx = /* @__PURE__ */ new Map();
+    let tagIds = {};
+    let paletteIdx = {};
+    function sync() {
+      const dl = ws.dl;
+      if (!dl) {
+        forDl = null;
+        ws.msFlags = ws.msColor = ws.msCond = null;
+        ws.msActive = false;
+        return false;
+      }
+      if (forDl === dl) return true;
+      forDl = dl;
+      keyIdx = /* @__PURE__ */ new Map();
+      for (let i = 0; i < dl.keys.length; i++) keyIdx.set(dl.keys[i], i);
+      tagIds = {};
+      paletteIdx = {};
+      ws.msPalette = [];
+      ws.msFlags = new Uint8Array(dl.keys.length);
+      ws.msColor = new Uint16Array(dl.keys.length);
+      ws.msCond = new Uint16Array(dl.keys.length);
+      ws.msActive = false;
+      return true;
+    }
+    function keyIds(keys) {
+      sync();
+      const out = new Int32Array(keys.length);
+      for (let i = 0; i < keys.length; i++) {
+        const v = keyIdx.get(keys[i]);
+        out[i] = v == null ? -1 : v;
+      }
+      return out;
+    }
+    function condStatesBegin() {
+      if (!sync() || !ws.msCond) return false;
+      ws.msCond.fill(0);
+      return true;
+    }
+    function condStateSet(tag, tagged, members, active, color) {
+      const cond = ws.msCond;
+      if (!cond || !ws.dl) return;
+      let ids = tagIds[tag];
+      if (!ids) ids = tagIds[tag] = keyIds(tagged);
+      let code = 1;
+      if (color != null) {
+        let p = paletteIdx[color];
+        if (p == null) {
+          p = paletteIdx[color] = ws.msPalette.length;
+          ws.msPalette.push(color);
+        }
+        code = p + 2;
+      }
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        if (id < 0) continue;
+        cond[id] = active && !members[tagged[i]] ? code : 0;
+      }
+    }
+    function updateMarkStates() {
+      if (!ws.rasterMode || !sync() || !ws.msFlags || !ws.msColor || !ws.msCond) return;
+      const flags = ws.msFlags, color = ws.msColor, cond = ws.msCond;
+      flags.fill(0);
+      color.fill(0);
+      let active = false;
+      for (let k = 0; k < cond.length; k++) {
+        const c = cond[k];
+        if (!c) continue;
+        active = true;
+        if (c === 1) flags[k] = MS_DIM;
+        else color[k] = c - 1;
+      }
+      const hide = function(set) {
+        for (const key in set) {
+          if (!set[key]) continue;
+          const id = keyIdx.get(key);
+          if (id != null) {
+            flags[id] |= MS_HIDDEN;
+            active = true;
+          }
+        }
+      };
+      hide(ws.filteredKeySet);
+      hide(ws.hiddenKeySet);
+      if (ws.fx.legendPolicy() === "mute") {
+        for (const s in ws.legendOff) {
+          if (!ws.legendOff[s]) continue;
+          const members = ws.legendIndex[s] || [];
+          for (let i = 0; i < members.length; i++) {
+            const id = keyIdx.get(members[i]);
+            if (id != null) {
+              flags[id] |= MS_MUTED;
+              active = true;
+            }
+          }
+        }
+      }
+      ws.msActive = active;
+      ws.msDimAlpha = dimAlpha();
+      if (ws.fx.ringMode()) ws.fx.drawPoints(true);
+    }
+    function dimAlpha() {
+      try {
+        const v = parseFloat(getComputedStyle(ws.el).getPropertyValue("--vellumwidget-dim-opacity"));
+        return isFinite(v) && v >= 0 && v <= 1 ? v : DIM_DEFAULT;
+      } catch (e) {
+        return DIM_DEFAULT;
+      }
+    }
+    return { condStatesBegin, condStateSet, updateMarkStates, keyIds };
+  }
+
+  // srcts/features/detail.ts
+  var DETAIL_DEFAULT = 3e3;
+  function detailFeature(ws) {
+    let timer = 0;
+    function ringMode() {
+      return ws.rasterMode && ws.markTier !== "detail";
+    }
+    function enterAt() {
+      const v = ws.opts.detailMarks;
+      return v == null ? DETAIL_DEFAULT : v;
+    }
+    function scheduleTier() {
+      if (timer) clearTimeout(timer);
+      timer = 0;
+      if (!ws.rasterMode || !ws.dl) return;
+      timer = window.setTimeout(function() {
+        timer = 0;
+        evalTier();
+      }, SETTLE_MS);
+    }
+    function zoomed() {
+      if (!ws.vb || !ws.vb0) return false;
+      if (ws.axisZoomActive && ws.azPanels.length) {
+        return ws.azPanels.some(function(a) {
+          const t = ws.fx.azT(a);
+          return t.sx > 1.0001 || t.sy > 1.0001;
+        });
+      }
+      return isZoomedIn(ws.vb, ws.vb0);
+    }
+    function visibleRecords(dl, cap) {
+      const out = [];
+      const np = dl.panels.length;
+      const T = [null];
+      for (let p = 1; p <= np; p++) {
+        const a = ws.axisZoomActive ? ws.azPanels.filter((q) => q.p.name === dl.panels[p - 1])[0] : null;
+        if (a) {
+          const t = ws.fx.azT(a);
+          T.push({ sx: t.sx, sy: t.sy, tx: t.tx, ty: t.ty, r: [a.p.px0, a.p.py0, a.p.px1, a.p.py1] });
+        } else T.push(null);
+      }
+      const vb = ws.vb;
+      for (let i = 0; i < dl.n; i++) {
+        let x = (dl.bx0[i] + dl.bx1[i]) / 2, y = (dl.by0[i] + dl.by1[i]) / 2;
+        const t = dl.panel[i] <= np ? T[dl.panel[i]] : null;
+        if (t) {
+          x = t.sx * x + t.tx;
+          y = t.sy * y + t.ty;
+          if (x < t.r[0] || x > t.r[2] || y < t.r[1] || y > t.r[3]) continue;
+        } else if (ws.axisZoomActive) {
+          if (x < ws.vb0.x || x > ws.vb0.x + ws.vb0.w || y < ws.vb0.y || y > ws.vb0.y + ws.vb0.h) continue;
+        } else if (x < vb.x || x > vb.x + vb.w || y < vb.y || y > vb.y + vb.h) continue;
+        out.push(i);
+        if (out.length > cap) return null;
+      }
+      return out;
+    }
+    function evalTier() {
+      const dl = ws.dl;
+      const enter = enterAt();
+      if (!ws.rasterMode || !dl || !dl.exact || !(enter > 0) || !ws.svgEl) {
+        if (ws.markTier === "detail") leaveDetail();
+        if (ws.rasterMode) ws.markTier = zoomed() ? "mid" : "overview";
+        return;
+      }
+      if (!zoomed()) {
+        if (ws.markTier === "detail") leaveDetail();
+        ws.markTier = "overview";
+        return;
+      }
+      const exit = Math.round(enter * 1.5);
+      const vis = visibleRecords(dl, ws.markTier === "detail" ? exit : enter - 1);
+      if (vis == null) {
+        if (ws.markTier === "detail") leaveDetail();
+        ws.markTier = "mid";
+        return;
+      }
+      buildDetail(dl, vis);
+    }
+    function splitHex(c) {
+      if (/^#[0-9a-fA-F]{8}$/.test(c)) {
+        const a = parseInt(c.slice(7, 9), 16) / 255;
+        return [c.slice(0, 7), a >= 1 ? null : String(Math.round(a * 1e3) / 1e3)];
+      }
+      return [c, null];
+    }
+    function nodeFor(dl, i) {
+      const j = dl.row[i], kd = dl.kind[i];
+      let n;
+      let glyph = false;
+      if (kd === DL_POINT) {
+        const sh = dl.shape[j], cx = dl.cx[j], cy = dl.cy[j], r = dl.r[j];
+        glyph = true;
+        if (sh === 0 || !isLineGlyph(sh) && !markerRing(sh)) {
+          n = document.createElementNS(SVGNS, "circle");
+          n.setAttribute("cx", String(cx));
+          n.setAttribute("cy", String(cy));
+          n.setAttribute("r", String(r));
+        } else {
+          n = document.createElementNS(SVGNS, "path");
+          let d = "";
+          if (sh === 4) d = "M" + cx + " " + (cy - r) + "V" + (cy + r) + "M" + (cx - r) + " " + cy + "H" + (cx + r);
+          else if (sh === 5) {
+            const q = r * Math.SQRT1_2;
+            d = "M" + (cx - q) + " " + (cy - q) + "L" + (cx + q) + " " + (cy + q) + "M" + (cx - q) + " " + (cy + q) + "L" + (cx + q) + " " + (cy - q);
+          } else {
+            const m = markerRing(sh);
+            for (let k = 0; k < m.length; k += 2) d += (k ? "L" : "M") + (cx + m[k] * r) + " " + (cy + m[k + 1] * r);
+            d += "Z";
+          }
+          n.setAttribute("d", d);
+        }
+      } else if (kd === DL_RECT) {
+        n = document.createElementNS(SVGNS, "rect");
+        const x = dl.rx[j], y = dl.ry[j], w = dl.rw[j], h = dl.rh[j];
+        n.setAttribute("x", String(Math.min(x, x + w)));
+        n.setAttribute("y", String(Math.min(y, y + h)));
+        n.setAttribute("width", String(Math.abs(w)));
+        n.setAttribute("height", String(Math.abs(h)));
+      } else {
+        n = document.createElementNS(SVGNS, "path");
+        let d = "";
+        const closed = dl.closed[j] === 1;
+        for (let run = dl.pathOff[j]; run < dl.pathOff[j + 1]; run++) {
+          for (let v = dl.runOff[run]; v < dl.runOff[run + 1]; v++) {
+            d += (v === dl.runOff[run] ? "M" : "L") + dl.xy[2 * v] + " " + dl.xy[2 * v + 1];
+          }
+          if (closed) d += "Z";
+        }
+        n.setAttribute("d", d);
+        if (dl.evenodd[j] === 1) n.setAttribute("fill-rule", "evenodd");
+      }
+      const pt = dl.paints[dl.paint[i]];
+      const fillable = kd !== 2 || dl.closed[j] === 1;
+      if (pt.fill && fillable && !(kd === DL_POINT && isLineGlyph(dl.shape[j]))) {
+        const f = splitHex(pt.fill);
+        n.setAttribute("fill", f[0]);
+        if (f[1] != null) n.setAttribute("fill-opacity", f[1]);
+      } else n.setAttribute("fill", "none");
+      if (pt.stroke && pt.width > 0) {
+        const s = splitHex(pt.stroke);
+        n.setAttribute("stroke", s[0]);
+        if (s[1] != null) n.setAttribute("stroke-opacity", s[1]);
+        n.setAttribute("stroke-width", String(pt.width));
+        if (pt.dash) n.setAttribute("stroke-dasharray", pt.dash.join(" "));
+        n.setAttribute("stroke-linecap", pt.cap);
+        n.setAttribute("stroke-linejoin", pt.join);
+      }
+      n.setAttribute("data-key", dl.keys[dl.key[i]]);
+      if (ws.axisZoomActive) {
+        if (glyph && ws.opts.zoomMarks !== "scale") {
+          n.style.setProperty("transform-box", "fill-box");
+          n.style.setProperty("transform-origin", "center");
+          n.style.setProperty("transform", "scale(var(--vw-ix,1),var(--vw-iy,1))");
+        } else n.setAttribute("vector-effect", "non-scaling-stroke");
+      }
+      return n;
+    }
+    function dropNodes() {
+      for (let i = 0; i < ws.detailGroups.length; i++) ws.detailGroups[i].remove();
+      ws.detailGroups = [];
+      for (let i = 0; i < ws.detailKeys.length; i++) {
+        const k = ws.detailKeys[i], nodes = ws.nodesByKey[k];
+        if (!nodes) continue;
+        const keep = nodes.filter((n) => !n.closest || !n.closest(".vellumwidget-detail"));
+        if (keep.length) ws.nodesByKey[k] = keep;
+        else delete ws.nodesByKey[k];
+      }
+      ws.detailKeys = [];
+    }
+    function buildDetail(dl, vis) {
+      const svg = ws.svgEl;
+      dropNodes();
+      const groups = {};
+      const groupFor = function(p) {
+        if (groups[p]) return groups[p];
+        const g = document.createElementNS(SVGNS, "g");
+        g.setAttribute("class", "vellumwidget-detail");
+        const name = p > 0 ? dl.panels[p - 1] : null;
+        const host = name && svg.querySelector('[data-vellum-pan="' + cssEscape(name) + '"]') || svg;
+        host.appendChild(g);
+        ws.detailGroups.push(g);
+        groups[p] = g;
+        return g;
+      };
+      const seen = {};
+      for (let v = 0; v < vis.length; v++) {
+        const i = vis[v];
+        const n = nodeFor(dl, i);
+        groupFor(dl.panel[i] <= dl.panels.length ? dl.panel[i] : 0).appendChild(n);
+        const k = dl.keys[dl.key[i]];
+        (ws.nodesByKey[k] = ws.nodesByKey[k] || []).push(n);
+        if (!seen[k]) {
+          seen[k] = true;
+          ws.detailKeys.push(k);
+        }
+      }
+      const was = ws.markTier;
+      ws.markTier = "detail";
+      ws.calib = null;
+      ws.hoverSig = "";
+      if (ws.canvasEl) ws.canvasEl.style.display = "none";
+      ws.fx.showMarksLayer(false);
+      ws.fx.clearGroup(ws.selGroup);
+      ws.fx.clearGroup(ws.hovGroup);
+      ws.fx.refreshSelected();
+      ws.fx.applyLegend();
+      for (let i = 0; i < ws.detailKeys.length; i++) {
+        if (ws.filteredKeySet[ws.detailKeys[i]]) ws.fx.addClassForKeys([ws.detailKeys[i]], "vellumwidget-filtered");
+      }
+      if (ws.hovering && ws.lastHoverKeys.length) ws.fx.addClassForKeys(ws.lastHoverKeys, "vellumwidget-hl");
+      ws.fx.setupA11y();
+      if (was !== "detail") ws.fx.announce(ws.detailKeys.length + " marks in view");
+    }
+    function leaveDetail() {
+      if (ws.markTier !== "detail") return;
+      dropNodes();
+      ws.markTier = "mid";
+      ws.calib = null;
+      ws.hoverSig = "";
+      ws.el.classList.remove("vellumwidget-hovering");
+      ws.fx.refreshSelected();
+      ws.fx.setupA11y();
+      ws.fx.showMarksLayer(true);
+      ws.fx.drawPoints();
+    }
+    return { scheduleTier, evalTier, ringMode, leaveDetail };
   }
 
   // srcts/binds.ts
@@ -2405,7 +3082,9 @@
       if (n.style.stroke) n.style.stroke = "";
     }
     function applyConditions() {
-      if (ws.rasterMode || !ws.interactions || !ws.interactions.conditions) return;
+      if (!ws.interactions || !ws.interactions.conditions) return;
+      const ring = ws.fx.ringMode();
+      if (ring && !ws.fx.condStatesBegin()) return;
       const selByName = {};
       (ws.interactions.selections || []).forEach((s) => selByName[s.name] = s);
       for (let ci = 0; ci < ws.interactions.conditions.length; ci++) {
@@ -2415,6 +3094,10 @@
         const sel = selByName[c.selection];
         const members = sel ? selectionMembers(sel) : {};
         const active = Object.keys(members).length > 0 || c.empty === false;
+        if (ring) {
+          ws.fx.condStateSet(tag, tagged, members, active, c.if_false);
+          continue;
+        }
         for (let i = 0; i < tagged.length; i++) {
           const nodes = ws.fx.elementsForKey(tagged[i]);
           const member = !!members[tagged[i]];
@@ -2432,7 +3115,8 @@
     }
     function applyFilters() {
       const ix = ws.interactions;
-      if (ws.rasterMode || !ix || !ix.filters || !ix.filters.length) return;
+      if (!ix || !ix.filters || !ix.filters.length) return false;
+      if (ws.fx.ringMode() && !ws.dl) return false;
       const filters = ix.filters;
       const selByName = {};
       (ix.selections || []).forEach((s) => selByName[s.name] = s);
@@ -2455,17 +3139,18 @@
       }
       if (!restrict) {
         ws.fx.applyFilter(null);
-        return;
+        return true;
       }
       const show = [];
       for (let i = 0; i < ws.elements.length; i++) {
         if (!hide[ws.elements[i].key]) show.push(ws.elements[i].key);
       }
       ws.fx.applyFilter(show);
+      return true;
     }
     function reevaluateInteractions() {
       applyConditions();
-      applyFilters();
+      if (!applyFilters() && ws.rasterMode) ws.fx.updateMarkStates();
       ws.fx.applyScaleBinds();
     }
     return { setupInteractions, reevaluateInteractions };
@@ -2476,7 +3161,7 @@
     function elementsForKey(k) {
       const cached = ws.nodesByKey[k];
       if (cached) return cached;
-      if (!ws.holder) return [];
+      if (!ws.holder || ws.rasterMode) return [];
       return Array.prototype.slice.call(ws.holder.querySelectorAll('[data-key="' + cssEscape(k) + '"]'));
     }
     function addClassForKeys(keys, cls) {
@@ -2740,7 +3425,7 @@
         ws.fx.reevaluateInteractions();
       }
     }
-    return { showHighlightOverlay, hideHighlightOverlay, clearCrosshair, drawCrosshair, showTip, showTipMulti, hideTip, moveTip, clearHover };
+    return { showHighlightOverlay, hideHighlightOverlay, clearCrosshair, drawCrosshair, showTip, showTipMulti, hideTip, moveTip, clearHover, azOverlayWrap };
   }
 
   // srcts/features/interval.ts
@@ -2875,7 +3560,10 @@
       ws.fx.clearClass("vellumwidget-legend-off");
       ws.hiddenKeySet = {};
       const pol = legendPolicy();
-      if (pol === "select") return;
+      if (pol === "select") {
+        if (ws.rasterMode) ws.fx.updateMarkStates();
+        return;
+      }
       const cls = pol === "mute" ? "vellumwidget-legend-muted" : "vellumwidget-legend-hidden";
       for (const s in ws.legendOff) {
         if (!ws.legendOff[s]) continue;
@@ -2884,6 +3572,7 @@
         if (pol === "hide") for (let i = 0; i < members.length; i++) ws.hiddenKeySet[members[i]] = true;
         ws.fx.addClassForKeys(ws.legendSwatch[s] || [], "vellumwidget-legend-off");
       }
+      if (ws.rasterMode) ws.fx.updateMarkStates();
     }
     function legendToggle(series) {
       ws.legendOff[series] = !ws.legendOff[series];
@@ -2942,8 +3631,10 @@
       clone.setAttribute("preserveAspectRatio", "none");
       clone.removeAttribute("width");
       clone.removeAttribute("height");
-      const defs = clone.querySelector("defs");
-      if (defs) defs.remove();
+      const defs = clone.querySelectorAll("defs");
+      for (let i = 0; i < defs.length; i++) defs[i].remove();
+      const uses = clone.querySelectorAll("use.vellumwidget-marks");
+      for (let i = 1; i < uses.length; i++) uses[i].remove();
       const clipped = clone.querySelectorAll("[clip-path]");
       for (let i = 0; i < clipped.length; i++) clipped[i].removeAttribute("clip-path");
       const keyed = clone.querySelectorAll("[data-key],[tabindex],[role]");
@@ -4192,12 +4883,18 @@
       ws.ptCx = ws.ptCy = ws.ptRad = null;
       ws.ptRGB = null;
       ws.ptN = 0;
+      ws.ptAllRound = false;
       if (ws.canvasEl) ws.canvasEl.style.display = "none";
+      showMarksLayer(true);
     }
     function sampleBaseRaster() {
       clearPointData();
+      if (ws.dl) {
+        drawPoints();
+        return;
+      }
       if (!ws.rasterMode || !ws.svgEl || !ws.vb0) return;
-      const imgNode = ws.svgEl.querySelector("image");
+      const imgNode = ws.svgEl.querySelector("image.vellumwidget-marks") || ws.svgEl.querySelector("image");
       const href = imgNode && (imgNode.getAttribute("href") || imgNode.getAttribute("xlink:href"));
       if (!href) return;
       const off = document.createElement("canvas");
@@ -4220,6 +4917,7 @@
           return;
         }
         const cx = [], cy = [], rad = [], rgb = [];
+        let allRound = true;
         for (let i = 0; i < els.length; i++) {
           const e = els[i];
           if (!hasBbox(e)) continue;
@@ -4228,6 +4926,7 @@
           const sy = Math.min(ih - 1, Math.max(0, Math.round(my)));
           const o = (sy * iw + sx) * 4;
           if (data[o + 3] < 8) continue;
+          if (!isRoundMark(e.mark)) allRound = false;
           cx.push(mx);
           cy.push(my);
           rad.push(Math.max(e.x1 - e.x0, e.y1 - e.y0) / 2 + 0.5);
@@ -4238,16 +4937,32 @@
         ws.ptCy = Float64Array.from(cy);
         ws.ptRad = Float64Array.from(rad);
         ws.ptRGB = Uint8Array.from(rgb);
+        ws.ptAllRound = allRound && cx.length > 0;
         drawPoints();
       };
       img.onerror = function() {
       };
       img.src = href;
     }
-    function drawPoints() {
+    function drawPoints(stateOnly) {
       if (!ws.rasterMode || !ws.canvasEl || !ws.ctx || !ws.vb || !ws.vb0) return;
-      if (!isZoomedIn(ws.vb, ws.vb0) || !ws.ptCx || !ws.ptCy || !ws.ptRad || !ws.ptRGB || !ws.ptN) {
+      if (ws.dl) {
+        if (ws.markTier === "detail") {
+          ws.canvasEl.style.display = "none";
+          showMarksLayer(false);
+          return;
+        }
+        drawList(ws.dl, false, !!stateOnly);
+        return;
+      }
+      const az = ws.axisZoomActive && ws.azPanels.length > 0;
+      const zoomed = az ? ws.azPanels.some(function(a) {
+        const t = ws.fx.azT(a);
+        return t.sx > 1.0001 || t.sy > 1.0001;
+      }) : isZoomedIn(ws.vb, ws.vb0);
+      if (!zoomed || !ws.ptCx || !ws.ptCy || !ws.ptRad || !ws.ptRGB || !ws.ptN) {
         ws.canvasEl.style.display = "none";
+        showMarksLayer(true);
         return;
       }
       const rect = (ws.svgEl || ws.el).getBoundingClientRect();
@@ -4261,19 +4976,257 @@
       ws.canvasEl.style.width = cw + "px";
       ws.canvasEl.style.height = ch + "px";
       ws.canvasEl.style.display = "block";
+      const ctx = ws.ctx;
       const W = ws.canvasEl.width, H = ws.canvasEl.height;
-      ws.ctx.clearRect(0, 0, W, H);
+      ctx.clearRect(0, 0, W, H);
+      const cx = ws.ptCx, cy = ws.ptCy, rad = ws.ptRad, rgb = ws.ptRGB, n = ws.ptN;
+      const dot = function(px, py, r, i) {
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(0.75, r), 0, 6.283185307179586);
+        ctx.fillStyle = "rgb(" + rgb[i * 3] + "," + rgb[i * 3 + 1] + "," + rgb[i * 3 + 2] + ")";
+        ctx.fill();
+      };
+      if (az) {
+        showMarksLayer(!ws.ptAllRound);
+        const view = ws.vb0;
+        const base = Math.min(W / view.w, H / view.h);
+        for (let k = 0; k < ws.azPanels.length; k++) {
+          const a = ws.azPanels[k], p = a.p, t = ws.fx.azT(a);
+          const c0 = userToCanvas(view, W, H, p.px0, p.py0), c1 = userToCanvas(view, W, H, p.px1, p.py1);
+          const rs = ws.opts.zoomMarks === "scale" ? base * Math.min(t.sx, t.sy) : base;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(c0.px, c0.py, c1.px - c0.px, c1.py - c0.py);
+          ctx.clip();
+          for (let i = 0; i < n; i++) {
+            const px = cx[i], py = cy[i];
+            if (px < p.px0 || px > p.px1 || py < p.py0 || py > p.py1) continue;
+            const bx = t.sx * px + t.tx, by = t.sy * py + t.ty;
+            if (bx < p.px0 || bx > p.px1 || by < p.py0 || by > p.py1) continue;
+            const q = userToCanvas(view, W, H, bx, by);
+            dot(q.px, q.py, rad[i] * rs, i);
+          }
+          ctx.restore();
+        }
+        return;
+      }
       const rScale = ws.opts.zoomMarks === "scale" ? Math.min(W / ws.vb.w, H / ws.vb.h) : Math.min(W / ws.vb0.w, H / ws.vb0.h);
       const x0 = ws.vb.x, y0 = ws.vb.y, x1 = ws.vb.x + ws.vb.w, y1 = ws.vb.y + ws.vb.h;
-      for (let i = 0; i < ws.ptN; i++) {
-        const px = ws.ptCx[i], py = ws.ptCy[i];
+      for (let i = 0; i < n; i++) {
+        const px = cx[i], py = cy[i];
         if (px < x0 || px > x1 || py < y0 || py > y1) continue;
-        const p = userToCanvas(ws.vb, W, H, px, py);
-        ws.ctx.beginPath();
-        ws.ctx.arc(p.px, p.py, Math.max(0.75, ws.ptRad[i] * rScale), 0, 6.283185307179586);
-        ws.ctx.fillStyle = "rgb(" + ws.ptRGB[i * 3] + "," + ws.ptRGB[i * 3 + 1] + "," + ws.ptRGB[i * 3 + 2] + ")";
-        ws.ctx.fill();
+        const q = userToCanvas(ws.vb, W, H, px, py);
+        dot(q.px, q.py, rad[i] * rScale, i);
       }
+    }
+    function fitCanvas() {
+      const c = ws.canvasEl;
+      const rect = (ws.svgEl || ws.el).getBoundingClientRect();
+      const cw = Math.max(1, Math.round(rect.width || ws.vb0.w));
+      const ch = Math.max(1, Math.round(rect.height || ws.vb0.h));
+      const dpr = window.devicePixelRatio || 1;
+      if (c.width !== cw * dpr || c.height !== ch * dpr) {
+        c.width = cw * dpr;
+        c.height = ch * dpr;
+      }
+      c.style.width = cw + "px";
+      c.style.height = ch + "px";
+      c.style.display = "block";
+      return [c.width, c.height];
+    }
+    let settleTimer = 0;
+    function drawList(dl, settled, stateOnly) {
+      const ctx = ws.ctx, vb = ws.vb, vb0 = ws.vb0;
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = 0;
+      }
+      const az = ws.axisZoomActive && ws.azPanels.length > 0;
+      const zoomed = az ? ws.azPanels.some(function(a) {
+        const t = ws.fx.azT(a);
+        return t.sx > 1.0001 || t.sy > 1.0001;
+      }) : isZoomedIn(vb, vb0);
+      const styled = ws.msActive && !!ws.msFlags && !!ws.msColor;
+      if (!(zoomed || styled && dl.exact) || !dl.n) {
+        ws.canvasEl.style.display = "none";
+        showMarksLayer(true);
+        return;
+      }
+      const wasShown = ws.canvasEl.style.display === "block";
+      const [W, H] = fitCanvas();
+      const frame = az ? vb0 : vb;
+      const q0 = userToCanvas(frame, W, H, 0, 0), q1 = userToCanvas(frame, W, H, 1, 1);
+      const kx = q1.px - q0.px, ky = q1.py - q0.py;
+      const base = Math.min(W / vb0.w, H / vb0.h);
+      const scaleMarks = ws.opts.zoomMarks === "scale";
+      const np = dl.panels.length;
+      const aff = [], gs = [], pclip = [];
+      const ident = { ax: kx, bx: q0.px, ay: ky, by: q0.py };
+      for (let p = 0; p <= np; p++) {
+        let A = ident, g = scaleMarks ? kx : base, c = null;
+        const a = az && p > 0 ? ws.azPanels.filter((q) => q.p.name === dl.panels[p - 1])[0] : null;
+        if (a) {
+          const t = ws.fx.azT(a);
+          A = { ax: kx * t.sx, bx: kx * t.tx + q0.px, ay: ky * t.sy, by: ky * t.ty + q0.py };
+          g = scaleMarks ? base * Math.min(t.sx, t.sy) : base;
+          c = [kx * a.p.px0 + q0.px, ky * a.p.py0 + q0.py, kx * a.p.px1 + q0.px, ky * a.p.py1 + q0.py];
+        }
+        aff.push(A);
+        gs.push(g);
+        pclip.push(c);
+      }
+      if (!settled && dl.n > LIVE_DRAW_MAX) {
+        let vis = 0;
+        for (let i = 0; i < dl.n && vis <= LIVE_DRAW_MAX; i++) {
+          const A = aff[dl.panel[i] <= np ? dl.panel[i] : 0], pc = pclip[dl.panel[i] <= np ? dl.panel[i] : 0];
+          const x = A.ax * (dl.bx0[i] + dl.bx1[i]) / 2 + A.bx, y = A.ay * (dl.by0[i] + dl.by1[i]) / 2 + A.by;
+          if (x < 0 || y < 0 || x > W || y > H) continue;
+          if (pc && (x < pc[0] || x > pc[2] || y < pc[1] || y > pc[3])) continue;
+          vis++;
+        }
+        if (vis > LIVE_DRAW_MAX) {
+          if (!(stateOnly && wasShown)) {
+            ws.canvasEl.style.display = "none";
+            showMarksLayer(true);
+          }
+          settleTimer = window.setTimeout(function() {
+            settleTimer = 0;
+            if (ws.dl === dl) {
+              fitCanvas();
+              drawList(dl, true);
+            }
+          }, SETTLE_MS);
+          return;
+        }
+      }
+      showMarksLayer(!dl.exact);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const flags = styled ? ws.msFlags : null, recol = styled ? ws.msColor : null, pal = ws.msPalette;
+      const dimA = ws.msDimAlpha;
+      let curFill = null, curStroke = null;
+      let curState = -1, curPaint = -1, curOv = 0, curAlpha = 1, open = false, batch = false;
+      const flush = function() {
+        if (!open) return;
+        const pt = dl.paints[curPaint];
+        if (curFill) {
+          ctx.fillStyle = curFill;
+          ctx.fill();
+        }
+        if (curStroke && pt.width > 0) ctx.stroke();
+        open = false;
+      };
+      const setPaint = function(pi, ov) {
+        const pt = dl.paints[pi];
+        ctx.lineWidth = pt.width * base;
+        ctx.setLineDash(pt.dash ? pt.dash.map((d) => d * base) : []);
+        ctx.lineCap = pt.cap;
+        ctx.lineJoin = pt.join;
+        const oc = ov ? pal[ov - 1] : null;
+        curFill = pt.fill && oc ? withAlphaOf(oc, pt.fill) : pt.fill;
+        curStroke = pt.stroke && oc ? withAlphaOf(oc, pt.stroke) : pt.stroke;
+        if (curStroke) ctx.strokeStyle = curStroke;
+      };
+      ctx.save();
+      for (let i = 0; i < dl.n; i++) {
+        if (dl.flags[i]) continue;
+        let ov = 0, alpha = 1;
+        if (flags) {
+          const k = dl.key[i], f = flags[k];
+          if (f & MS_HIDDEN) continue;
+          if (f & MS_DIM) alpha = dimA;
+          else if (f & MS_MUTED) alpha = MUTED_ALPHA;
+          ov = recol[k];
+        }
+        const p = dl.panel[i] <= np ? dl.panel[i] : 0;
+        const A = aff[p];
+        let x0 = A.ax * dl.bx0[i] + A.bx, x1 = A.ax * dl.bx1[i] + A.bx;
+        let y0 = A.ay * dl.by0[i] + A.by, y1 = A.ay * dl.by1[i] + A.by;
+        const kd = dl.kind[i];
+        if (kd === DL_POINT) {
+          const j = dl.row[i], cx = A.ax * dl.cx[j] + A.bx, cy = A.ay * dl.cy[j] + A.by, rr = dl.r[j] * gs[p];
+          x0 = cx - rr;
+          x1 = cx + rr;
+          y0 = cy - rr;
+          y1 = cy + rr;
+        }
+        const pc = pclip[p];
+        if (x1 < 0 || y1 < 0 || x0 > W || y0 > H) continue;
+        if (pc && (x1 < pc[0] || x0 > pc[2] || y1 < pc[1] || y0 > pc[3])) continue;
+        const st = p * 65536 + dl.clip[i];
+        if (st !== curState) {
+          flush();
+          ctx.restore();
+          ctx.save();
+          if (pc) {
+            ctx.beginPath();
+            ctx.rect(pc[0], pc[1], pc[2] - pc[0], pc[3] - pc[1]);
+            ctx.clip();
+          }
+          const cr = dl.clip[i] > 0 ? dl.clips[dl.clip[i] - 1] : null;
+          if (cr) {
+            const cx0 = A.ax * cr.x0 + A.bx, cy0 = A.ay * cr.y0 + A.by;
+            ctx.beginPath();
+            ctx.rect(cx0, cy0, A.ax * (cr.x1 - cr.x0), A.ay * (cr.y1 - cr.y0));
+            ctx.clip();
+          }
+          curState = st;
+          curPaint = -1;
+          curAlpha = 1;
+        }
+        const pi = dl.paint[i], pt = dl.paints[pi];
+        const canBatch = kd !== 2 && pt.opaque && alpha === 1 && (ov ? isOpaqueHex(pal[ov - 1]) : !pt.fill || !pt.stroke || pt.fill === pt.stroke);
+        if (!(open && batch && canBatch && pi === curPaint && ov === curOv)) {
+          flush();
+          if (pi !== curPaint || ov !== curOv) {
+            setPaint(pi, ov);
+            curPaint = pi;
+            curOv = ov;
+          }
+          if (alpha !== curAlpha) {
+            ctx.globalAlpha = alpha;
+            curAlpha = alpha;
+          }
+          ctx.beginPath();
+          open = true;
+          batch = canBatch;
+        }
+        if (kd === DL_POINT) {
+          const j = dl.row[i], sh = dl.shape[j];
+          tracePoint(ctx, sh, A.ax * dl.cx[j] + A.bx, A.ay * dl.cy[j] + A.by, dl.r[j] * gs[p]);
+        } else if (kd === DL_RECT) {
+          traceShape(ctx, dl, i, A);
+        } else {
+          traceShape(ctx, dl, i, A);
+          const pf = curFill;
+          if (pf && dl.closed[dl.row[i]] === 1) {
+            ctx.fillStyle = pf;
+            ctx.fill(dl.evenodd[dl.row[i]] === 1 ? "evenodd" : "nonzero");
+          }
+          if (curStroke && pt.width > 0) ctx.stroke();
+          open = false;
+        }
+        if (!batch) flush();
+      }
+      flush();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+    function withAlphaOf(c, ref) {
+      if (/^#[0-9a-fA-F]{6}$/.test(c) && /^#[0-9a-fA-F]{8}$/.test(ref)) {
+        const a = ref.slice(7, 9).toLowerCase();
+        return a === "ff" ? c : c + a;
+      }
+      return c;
+    }
+    function isOpaqueHex(c) {
+      return /^#[0-9a-fA-F]{6}$/.test(c) || /^#[0-9a-fA-F]{8}$/.test(c) && /ff$/i.test(c);
+    }
+    function showMarksLayer(on) {
+      if (!ws.svgEl || !ws.marksLayer) return;
+      ws.svgEl.classList.toggle("vellumwidget-marks-off", !on);
+      const drawn = ws.svgEl.querySelectorAll("use.vellumwidget-marks, svg > image.vellumwidget-marks");
+      for (let i = 0; i < drawn.length; i++) drawn[i].style.visibility = on ? "" : "hidden";
     }
     function ringFor(k, cls) {
       const m = ws.meta[k];
@@ -4299,7 +5252,7 @@
       if (keys.length > OVERLAY_MARK_CAP) return;
       for (let i = 0; i < keys.length; i++) {
         const c = ringFor(keys[i], "vellumwidget-fb-sel");
-        if (c) ws.selGroup.appendChild(c);
+        if (c) ws.selGroup.appendChild(ws.fx.azOverlayWrap(c, keys[i]));
       }
     }
     function drawHovFeedback(keys) {
@@ -4307,15 +5260,19 @@
       if (!ws.hovGroup) return;
       for (let i = 0; i < keys.length; i++) {
         const c = ringFor(keys[i], "vellumwidget-fb-hov");
-        if (c) ws.hovGroup.appendChild(c);
+        if (c) ws.hovGroup.appendChild(ws.fx.azOverlayWrap(c, keys[i]));
       }
     }
     function setHoverKeys(keys) {
       ws.hoverSig = "";
       if (!ws.opts.hover) return;
       ws.hovering = true;
-      if (ws.rasterMode) {
+      if (ws.fx.ringMode()) {
         drawHovFeedback(keys);
+        if (ws.dl && hoverDriven()) {
+          ws.lastHoverKeys = keys;
+          ws.fx.reevaluateInteractions();
+        }
         return;
       }
       ws.lastHoverKeys = keys;
@@ -4325,10 +5282,18 @@
       if (ws.largeDim) ws.fx.showHighlightOverlay(keys);
       else ws.el.classList.add("vellumwidget-hovering");
     }
+    function hoverDriven() {
+      const ix = ws.interactions;
+      if (!ix || !ix.selections) return false;
+      const used = {};
+      (ix.conditions || []).forEach((c) => used[c.selection] = true);
+      (ix.filters || []).forEach((f) => used[f.selection] = true);
+      return ix.selections.some((s) => s.on === "hover" && used[s.name]);
+    }
     function setHover(k) {
       setHoverKeys(ws.fx.linkedKeys(k));
     }
-    return { ensureCanvas, clearPointData, sampleBaseRaster, drawPoints, clearGroup, drawSelFeedback, setHoverKeys, setHover };
+    return { ensureCanvas, clearPointData, sampleBaseRaster, drawPoints, clearGroup, drawSelFeedback, setHoverKeys, setHover, showMarksLayer };
   }
 
   // srcts/ink.ts
@@ -4444,7 +5409,74 @@
   }
 
   // srcts/features/render.ts
+  var marksSeq = 0;
+  var aboveSeq = 0;
   function renderFeature(ws) {
+    function placeAbove(src) {
+      if (!ws.stage) return null;
+      const pre = "vw-above" + ++aboveSeq + "-";
+      const fixed = src.replace(/<\?xml[^>]*\?>/, "").replace(/(\s)id="([^"]+)"/g, '$1id="' + pre + '$2"').replace(/url\(#([^)]+)\)/g, "url(#" + pre + "$1)").replace(/(\s(?:xlink:)?href)="#([^"]+)"/g, '$1="#' + pre + '$2"');
+      const tmp = document.createElement("div");
+      tmp.innerHTML = fixed;
+      const svg = tmp.querySelector("svg");
+      if (!svg) return null;
+      const meta = svg.querySelectorAll("title, desc");
+      for (let i = 0; i < meta.length; i++) meta[i].remove();
+      svg.removeAttribute("role");
+      svg.removeAttribute("aria-labelledby");
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("class", "vellumwidget-above-layer");
+      const pans = svg.querySelectorAll("[data-vellum-pan][clip-path]");
+      for (let i = 0; i < pans.length; i++) {
+        const up = pans[i].parentNode;
+        if (up && up.hasAttribute("data-vellum-panel") && !up.hasAttribute("clip-path")) {
+          up.setAttribute("clip-path", pans[i].getAttribute("clip-path") || "");
+          pans[i].removeAttribute("clip-path");
+        }
+      }
+      if (ws.svgEl) svg.setAttribute("viewBox", ws.svgEl.getAttribute("viewBox") || "");
+      ws.stage.appendChild(svg);
+      return svg;
+    }
+    function placeMarks(svg, m) {
+      const img = document.createElementNS(SVGNS, "image");
+      img.setAttribute("class", "vellumwidget-marks");
+      img.setAttribute("x", "0");
+      img.setAttribute("y", "0");
+      img.setAttribute("width", String(m.width));
+      img.setAttribute("height", String(m.height));
+      img.setAttribute("preserveAspectRatio", "none");
+      img.setAttribute("href", m.href);
+      const names = asColumn(m.panels);
+      const pans = [];
+      for (let i = 0; i < names.length; i++) {
+        const g = svg.querySelector('[data-vellum-pan="' + cssEscape(names[i]) + '"]');
+        if (!g) {
+          pans.length = 0;
+          break;
+        }
+        pans.push(g);
+      }
+      if (!pans.length) {
+        svg.appendChild(img);
+        return "root";
+      }
+      const id = "vw-marks-" + ++marksSeq;
+      img.setAttribute("id", id);
+      const defs = document.createElementNS(SVGNS, "defs");
+      defs.setAttribute("class", "vellumwidget-marks-defs");
+      defs.appendChild(img);
+      svg.insertBefore(defs, svg.firstChild);
+      for (let i = 0; i < pans.length; i++) {
+        const u = document.createElementNS(SVGNS, "use");
+        u.setAttribute("class", "vellumwidget-marks");
+        u.setAttribute("href", "#" + id);
+        pans[i].appendChild(u);
+      }
+      return "pans";
+    }
     function applyStyling() {
       const s = ws.opts.style || {};
       const setRoot = (name, v) => {
@@ -4514,6 +5546,8 @@
         x.options || {}
       );
       ws.elements = normalizeElements(x.elements);
+      ws.dl = x.options && x.options.raster && x.displayList ? decodeDisplayList(x.displayList) : null;
+      if (ws.dl) fillBboxes(ws.elements, ws.dl);
       ws.panels = normalizePanels(x.panels);
       ws.colorbar = x.colorbar || null;
       ws.interactions = x.interactions || null;
@@ -4599,8 +5633,16 @@
           ws.fx.hideTip();
         });
       }
+      if (ws.aboveEl) {
+        ws.aboveEl.remove();
+        ws.aboveEl = null;
+      }
       ws.holder.innerHTML = x.svg;
+      ws.markTier = "overview";
+      ws.detailGroups = [];
+      ws.detailKeys = [];
       ws.svgEl = ws.holder.querySelector("svg");
+      ws.marksLayer = ws.svgEl && x.marks && x.options && x.options.raster ? placeMarks(ws.svgEl, x.marks) : null;
       ws.nodesByKey = {};
       if (ws.holder) {
         const keyed = ws.holder.querySelectorAll("[data-key]");
@@ -4639,6 +5681,7 @@
         } else {
           ws.fx.clearPointData();
         }
+        if (ws.rasterMode && ws.marksLayer && x.above) ws.aboveEl = placeAbove(x.above);
         ws.fx.buildSpatialIndex();
         ws.fx.buildGeometry(x.geometry);
         ws.fx.buildHoverAxis();
@@ -4648,7 +5691,7 @@
         ws.fx.buildColorbar();
         ws.fx.setupInteractions();
         ws.fx.setupAxisZoom();
-        ws.xZoom = !!ws.opts.navigator && !ws.rasterMode;
+        ws.xZoom = !!ws.opts.navigator && (!ws.rasterMode || ws.marksLayer === "pans");
         ws.fx.applyAspect();
         ws.fx.setMode(defaultMode());
         ws.tip.classList.toggle("vellumwidget-tip-sticky", !!ws.opts.tooltipSticky);
@@ -4754,8 +5797,9 @@
       }
     }
     function refreshSelected() {
-      if (ws.rasterMode) {
+      if (ws.fx.ringMode()) {
         ws.fx.drawSelFeedback();
+        ws.fx.reevaluateInteractions();
         return;
       }
       ws.fx.clearClass("vellumwidget-selected");
@@ -4807,16 +5851,18 @@
       ws.calib = null;
       ws.fx.clearClass("vellumwidget-filtered");
       ws.filteredKeySet = {};
-      if (showKeys == null) return;
-      const show = {};
-      for (let i = 0; i < showKeys.length; i++) show[showKeys[i]] = true;
-      for (let i = 0; i < ws.elements.length; i++) {
-        const key = ws.elements[i].key;
-        if (!show[key]) {
-          ws.fx.addClassForKeys([key], "vellumwidget-filtered");
-          ws.filteredKeySet[key] = true;
+      if (showKeys != null) {
+        const show = {};
+        for (let i = 0; i < showKeys.length; i++) show[showKeys[i]] = true;
+        for (let i = 0; i < ws.elements.length; i++) {
+          const key = ws.elements[i].key;
+          if (!show[key]) {
+            ws.fx.addClassForKeys([key], "vellumwidget-filtered");
+            ws.filteredKeySet[key] = true;
+          }
         }
       }
+      if (ws.rasterMode) ws.fx.updateMarkStates();
     }
     function inert(k) {
       return !!ws.hiddenKeySet[k] || !!ws.filteredKeySet[k] || !!ws.colorHiddenSet[k];
@@ -4887,7 +5933,7 @@
         ws.unwatchRemoval = null;
       }
     }
-    return { shinyInput, selectedKeys, toggleSelect, setSelection, clearSelection, applyFilter, inert, dropInert, setupLinking, teardownLinking };
+    return { refreshSelected, shinyInput, selectedKeys, toggleSelect, setSelection, clearSelection, applyFilter, inert, dropInert, setupLinking, teardownLinking };
   }
 
   // srcts/features/source.ts
@@ -5006,14 +6052,33 @@
       const s = ws.opts.export && ws.opts.export.scale;
       return s && s > 0 ? s : 1;
     }
+    function exportSvgString() {
+      const svg = ws.svgEl.cloneNode(true);
+      svg.classList.remove("vellumwidget-marks-off");
+      const drawn = svg.querySelectorAll(".vellumwidget-marks");
+      for (let i = 0; i < drawn.length; i++) drawn[i].style.visibility = "";
+      if (ws.aboveEl) {
+        const g = document.createElementNS(SVGNS, "g");
+        g.setAttribute("class", "vellumwidget-above-export");
+        for (let c = ws.aboveEl.firstChild; c; c = c.nextSibling) g.appendChild(c.cloneNode(true));
+        svg.appendChild(g);
+      }
+      if (ws.axisZoomActive && ws.retickLayer) {
+        const g = document.createElementNS(SVGNS, "g");
+        g.setAttribute("class", "vellumwidget-retick-export");
+        for (let c = ws.retickLayer.firstChild; c; c = c.nextSibling) g.appendChild(c.cloneNode(true));
+        svg.appendChild(g);
+      }
+      return new XMLSerializer().serializeToString(svg);
+    }
     function saveSvg() {
       if (!ws.svgEl) return;
-      const s = new XMLSerializer().serializeToString(ws.svgEl);
+      const s = exportSvgString();
       download(new Blob([s], { type: "image/svg+xml;charset=utf-8" }), exportName() + ".svg");
     }
     function toCanvas(then, fail) {
       if (!ws.svgEl) return fail();
-      const s = new XMLSerializer().serializeToString(ws.svgEl);
+      const s = exportSvgString();
       const url = URL.createObjectURL(new Blob([s], { type: "image/svg+xml;charset=utf-8" }));
       const img = new Image();
       img.onload = function() {
@@ -5197,6 +6262,7 @@
       if (ws.dimLayer) ws.dimLayer.setAttribute("preserveAspectRatio", par);
       if (ws.crosshairLayer) ws.crosshairLayer.setAttribute("preserveAspectRatio", par);
       if (ws.colorbarLayer) ws.colorbarLayer.setAttribute("preserveAspectRatio", par);
+      if (ws.aboveEl) ws.aboveEl.setAttribute("preserveAspectRatio", par);
     }
     function applyViewBox() {
       ws.calib = null;
@@ -5212,14 +6278,17 @@
       } else if (ws.svgEl && ws.vb) {
         ws.svgEl.setAttribute("viewBox", fmtViewBox(ws.vb));
       }
+      if (ws.aboveEl && ws.svgEl) ws.aboveEl.setAttribute("viewBox", ws.svgEl.getAttribute("viewBox") || "");
       const overlayVb = ws.fx.azMulti() ? ws.vb0 : ws.vb;
       if (ws.dimLayer && overlayVb) ws.dimLayer.setAttribute("viewBox", fmtViewBox(overlayVb));
       if (ws.crosshairLayer && overlayVb) ws.crosshairLayer.setAttribute("viewBox", fmtViewBox(overlayVb));
       ws.fx.placeIntervalBand();
+      if (ws.rasterMode && ws.fx.azMulti()) ws.fx.drawSelFeedback();
       if (ws.colorbarLayer && (ws.vb || ws.vb0)) {
         ws.colorbarLayer.setAttribute("viewBox", fmtViewBox(ws.axisZoomActive && ws.vb0 ? ws.vb0 : ws.vb));
       }
       ws.fx.drawPoints();
+      ws.fx.scheduleTier();
       ws.fx.updateNav();
       if (ws.dragging !== "pan" && ws.pinchDist === 0) reportView();
     }
@@ -5312,6 +6381,18 @@
       tolX: 1,
       tolY: 1,
       rasterMode: false,
+      marksLayer: null,
+      aboveEl: null,
+      dl: null,
+      markTier: "overview",
+      msFlags: null,
+      msColor: null,
+      msCond: null,
+      msPalette: [],
+      msActive: false,
+      msDimAlpha: 0.28,
+      detailGroups: [],
+      detailKeys: [],
       selGroup: null,
       hovGroup: null,
       canvasEl: null,
@@ -5321,6 +6402,7 @@
       ptRad: null,
       ptRGB: null,
       ptN: 0,
+      ptAllRound: false,
       opts: {
         tooltip: true,
         hover: true,
@@ -5414,7 +6496,9 @@
         sourceFeature(ws),
         toolbarFeature(ws),
         renderFeature(ws),
-        a11yFeature(ws)
+        a11yFeature(ws),
+        detailFeature(ws),
+        markStateFeature(ws)
       );
       ensureStyle();
       el.classList.add("vellumwidget-root");
@@ -5458,6 +6542,23 @@
           },
           hasCanvas: function() {
             return !!ws.canvasEl;
+          },
+          displayListSize: function() {
+            return ws.dl ? ws.dl.n : 0;
+          },
+          markTier: function() {
+            return ws.markTier;
+          },
+          condTags: function() {
+            return Object.keys(ws.condTagElems).map(function(k) {
+              return k + "=" + ws.condTagElems[k].length;
+            }).join(",");
+          },
+          selectedKeys: ws.fx.selectedKeys,
+          evalTier: ws.fx.evalTier,
+          bboxOf: function(k) {
+            const m = ws.meta[k];
+            return m ? [m.x0, m.y0, m.x1, m.y1] : null;
           },
           pointCount: function() {
             return ws.ptN;
@@ -5666,6 +6767,11 @@
     secAxisMap,
     secTicks,
     sourceTable,
+    decodeDisplayList,
+    fillBboxes,
+    tracePoint,
+    traceShape,
+    decodeKeys,
     bus: vellumwidgetBus
   };
 })();
