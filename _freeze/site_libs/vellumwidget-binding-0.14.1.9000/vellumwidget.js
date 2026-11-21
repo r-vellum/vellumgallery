@@ -41,6 +41,15 @@
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 2; display: none;
 }
+/* Blend runs (VW-32): a run with a blend mode is a canvas of its own stacked
+   over the marks canvas (inline mix-blend-mode), the marks after it on the
+   next one up. While any is shown the stage isolates the blending, so it
+   mixes with the widget's own furniture and marks, not the page. */
+.vellumwidget-canvas-layer {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 2; display: none;
+}
+.vellumwidget-root .vellumwidget-stage.vellumwidget-blend-iso { isolation: isolate; }
 /* Paint-order split (VW-21): the furniture drawn after the marks (a reference
    line or annotation added after the points), over the marks canvas and under
    the re-ticked labels and rings. Never a pointer target, so picking still
@@ -420,6 +429,23 @@
   var DL_RECT = 1;
   var DL_FLAG_PICK = 16;
   var DL_FLAG_BLEND = 32;
+  var BLEND_MODES = {
+    multiply: true,
+    screen: true,
+    overlay: true,
+    darken: true,
+    lighten: true,
+    "color-dodge": true,
+    "color-burn": true,
+    "hard-light": true,
+    "soft-light": true,
+    difference: true,
+    exclusion: true,
+    hue: true,
+    saturation: true,
+    color: true,
+    luminosity: true
+  };
   function b64bytes(s) {
     const bin = atob(s);
     const out = new Uint8Array(bin.length);
@@ -512,6 +538,8 @@
       runHref: null,
       runW: 0,
       runH: 0,
+      runBlend: null,
+      blendRuns: false,
       gradients: [],
       groups: [],
       cpXy: new Float32Array(0),
@@ -523,6 +551,17 @@
     if (dl.run.length !== n) {
       dl.run = new Uint32Array(n);
       dl.nRuns = 0;
+    }
+    if (raw.run_blend != null && dl.nRuns > 0) {
+      const rb = asColumn(raw.run_blend).map((m) => m == null ? "" : String(m));
+      if (rb.length === dl.nRuns) {
+        dl.runBlend = rb;
+        for (let r = 0; r < rb.length; r++) {
+          if (rb[r] === "normal") continue;
+          if (BLEND_MODES[rb[r]]) dl.blendRuns = true;
+          else dl.covered = false;
+        }
+      }
     }
     const k = raw.keys;
     if (k && typeof k === "object" && !Array.isArray(k) && "type" in k) {
@@ -600,7 +639,7 @@
         dl.exact = false;
       }
       if (dl.flags[i] & ~DL_FLAG_PICK && !(dl.run[i] > 0 && dl.run[i] <= dl.nRuns)) dl.covered = false;
-      if (dl.flags[i] & DL_FLAG_BLEND) dl.covered = false;
+      if (dl.flags[i] & DL_FLAG_BLEND && !dl.runBlend) dl.covered = false;
       const kd = kind[i];
       if (kd === DL_POINT) {
         const j = ip++, r = dl.r[j];
@@ -944,6 +983,7 @@
   var TIP_MULTI_CAP = 30;
   var MODE_ICON = { brush: "\u25AD", lasso: "\u25CC", pan: "\u270B" };
   var MODE_LABEL = { brush: "brush-select", lasso: "lasso-select", pan: "pan" };
+  var RUN_BOX_PAD = 2;
 
   // srcts/scales.ts
   var INVERTIBLE = { identity: true, log10: true, sqrt: true, reverse: true };
@@ -2299,6 +2339,7 @@
       }
       ws.msActive = active;
       ws.msDimAlpha = dimAlpha();
+      ws.fx.restyleRuns();
       if (ws.fx.ringMode()) ws.fx.drawPoints(true);
     }
     function dimAlpha() {
@@ -2310,6 +2351,185 @@
       }
     }
     return { condStatesBegin, condStateSet, updateMarkStates, keyIds };
+  }
+
+  // srcts/features/runStyle.ts
+  var CACHE_PER_RUN = 4;
+  function runStyleFeature(ws) {
+    let forDl = null;
+    let keyIdx = /* @__PURE__ */ new Map();
+    let runKeys = [];
+    let svgs = [];
+    let docs = [];
+    let cache = [];
+    let cur = [];
+    let want = [];
+    function sync() {
+      const dl = ws.dl;
+      if (!dl || !dl.runImgs || !ws.runSvg) {
+        forDl = null;
+        return false;
+      }
+      if (forDl === dl) return true;
+      forDl = dl;
+      svgs = ws.runSvg;
+      keyIdx = /* @__PURE__ */ new Map();
+      for (let i = 0; i < dl.keys.length; i++) keyIdx.set(dl.keys[i], i);
+      const sets = [];
+      for (let r = 0; r < dl.nRuns; r++) sets.push({});
+      for (let i = 0; i < dl.n; i++) {
+        const r = dl.run[i];
+        if (r > 0 && r <= dl.nRuns) sets[r - 1][dl.key[i]] = true;
+      }
+      runKeys = sets.map((s) => Uint32Array.from(Object.keys(s).map(Number)));
+      docs = [];
+      cache = [];
+      cur = [];
+      want = [];
+      return true;
+    }
+    function sigOf(r) {
+      if (!ws.msActive || !ws.msFlags || !ws.msColor) return "";
+      const flags = ws.msFlags, color = ws.msColor, ids = runKeys[r];
+      let s = "";
+      for (let q = 0; q < ids.length; q++) {
+        const k = ids[q], f = flags[k], c = color[k];
+        if (f || c) s += k + ":" + f + ":" + (c ? ws.msPalette[c - 1] : "") + ";";
+      }
+      return s ? s + "@" + ws.msDimAlpha : "";
+    }
+    function docFor(r) {
+      if (docs[r] !== void 0) return docs[r];
+      let el = null;
+      try {
+        const W = window;
+        const d = new W.DOMParser().parseFromString(svgs[r] || "", "image/svg+xml");
+        el = d.documentElement && d.documentElement.nodeName === "svg" && !d.getElementsByTagName("parsererror").length ? d.documentElement : null;
+      } catch (e) {
+        el = null;
+      }
+      docs[r] = el;
+      return el;
+    }
+    function render(r, sig) {
+      const dl = ws.dl, root = docFor(r);
+      if (!root) return null;
+      const svg = root.cloneNode(true);
+      const flags = ws.msFlags, color = ws.msColor, pal = ws.msPalette;
+      const nodes = Array.prototype.slice.call(svg.querySelectorAll("[data-key]"));
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const k2 = keyIdx.get(n.getAttribute("data-key") || "");
+        if (k2 == null) continue;
+        const f = flags[k2], c = color[k2];
+        if (f & MS_HIDDEN) {
+          if (n.parentNode) n.parentNode.removeChild(n);
+          continue;
+        }
+        let st = n.getAttribute("style") || "";
+        if (c) {
+          const col = pal[c - 1];
+          const fa = n.getAttribute("fill"), sa = n.getAttribute("stroke");
+          if (fa && fa !== "none") st += ";fill:" + col;
+          if (sa && sa !== "none") st += ";stroke:" + col;
+        }
+        if (f & MS_DIM) st += ";opacity:" + ws.msDimAlpha;
+        else if (f & MS_MUTED) st += ";opacity:" + MUTED_ALPHA;
+        if (st) n.setAttribute("style", st.replace(/^;/, ""));
+      }
+      const png = dl.runImgs[r];
+      const k = png && png.naturalWidth > 0 && dl.runW > 0 ? png.naturalWidth / dl.runW : 2;
+      svg.setAttribute("width", String(Math.round(dl.runW * k)));
+      svg.setAttribute("height", String(Math.round(dl.runH * k)));
+      let text = "";
+      try {
+        const W = window;
+        text = new W.XMLSerializer().serializeToString(svg);
+      } catch (e) {
+        return null;
+      }
+      const href = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(text);
+      const img = document.createElement("img");
+      const s = { img, href, ready: false };
+      img.onload = function() {
+        s.ready = true;
+        if (ws.dl !== dl || want[r] !== sig) return;
+        cur[r] = s;
+        refresh();
+      };
+      img.src = href;
+      return s;
+    }
+    function refresh() {
+      if (ws.markTier === "detail") {
+        const ims = ws.svgEl ? ws.svgEl.querySelectorAll("defs.vellumwidget-detail image[data-run]") : [];
+        for (let i = 0; i < ims.length; i++) {
+          const r = Number(ims[i].getAttribute("data-run"));
+          ims[i].setAttribute("href", runHref(r));
+        }
+      } else if (ws.fx.ringMode()) {
+        ws.fx.drawPoints(true);
+      }
+    }
+    function restyleRuns() {
+      if (!sync()) return false;
+      const dl = ws.dl;
+      let changed = false;
+      for (let r = 0; r < dl.nRuns; r++) {
+        const sig = sigOf(r);
+        want[r] = sig;
+        if (!sig) {
+          if (cur[r]) {
+            cur[r] = null;
+            changed = true;
+          }
+          continue;
+        }
+        const list = cache[r] || (cache[r] = []);
+        let hit = null;
+        for (let q = 0; q < list.length; q++) if (list[q].sig === sig) {
+          hit = list[q].s;
+          break;
+        }
+        if (!hit) {
+          hit = render(r, sig);
+          if (!hit) continue;
+          list.push({ sig, s: hit });
+          if (list.length > CACHE_PER_RUN) list.shift();
+        }
+        if (hit.ready && cur[r] !== hit) {
+          cur[r] = hit;
+          changed = true;
+        }
+      }
+      if (changed && ws.markTier === "detail") refresh();
+      return changed;
+    }
+    function runImage(r) {
+      const dl = ws.dl;
+      if (!dl || !dl.runImgs) return null;
+      const s = forDl === dl ? cur[r - 1] : null;
+      return s ? s.img : dl.runImgs[r - 1] || null;
+    }
+    function runHref(r) {
+      const dl = ws.dl;
+      if (!dl || !dl.runHref) return "";
+      const s = forDl === dl ? cur[r - 1] : null;
+      return s ? s.href : dl.runHref[r - 1] || "";
+    }
+    function runStyled() {
+      const dl = ws.dl;
+      const out = [];
+      if (!dl) return out;
+      for (let r = 0; r < dl.nRuns; r++) out.push(forDl === dl && !!cur[r]);
+      return out;
+    }
+    return { restyleRuns, runImage, runHref, runStyled };
+  }
+  function runSvgsOf(svg, n) {
+    if (svg == null) return null;
+    const a = asColumn(svg).map(String);
+    return a.length === n ? a : null;
   }
 
   // srcts/features/detail.ts
@@ -2599,8 +2819,34 @@
       };
       const runIds = {};
       const placed = {};
+      const panHost = [false];
+      for (let p = 1; p <= dl.panels.length; p++) {
+        panHost.push(!!svg.querySelector('[data-vellum-pan="' + cssEscape(dl.panels[p - 1]) + '"]'));
+      }
+      const anyPan = panHost.some((h) => h);
+      const rootClip = function(r) {
+        if (!anyPan || !D) return null;
+        const id = D.pre + "runclip" + r;
+        if (D.el.querySelector("#" + id)) return id;
+        const cp = document.createElementNS(SVGNS, "clipPath");
+        cp.setAttribute("id", id);
+        cp.setAttribute("clipPathUnits", "userSpaceOnUse");
+        for (let i = 0; i < dl.n; i++) {
+          if (dl.run[i] !== r) continue;
+          const p = dl.panel[i] <= dl.panels.length ? dl.panel[i] : 0;
+          if (panHost[p]) continue;
+          const rc = document.createElementNS(SVGNS, "rect");
+          rc.setAttribute("x", String(dl.bx0[i] - RUN_BOX_PAD));
+          rc.setAttribute("y", String(dl.by0[i] - RUN_BOX_PAD));
+          rc.setAttribute("width", String(dl.bx1[i] - dl.bx0[i] + 2 * RUN_BOX_PAD));
+          rc.setAttribute("height", String(dl.by1[i] - dl.by0[i] + 2 * RUN_BOX_PAD));
+          cp.appendChild(rc);
+        }
+        D.el.appendChild(cp);
+        return id;
+      };
       const placeRun = function(p, r) {
-        const tag = p + ":" + r;
+        const tag = (panHost[p] ? p : "root") + ":" + r;
         if (placed[tag] || !D || !dl.runHref) return;
         placed[tag] = true;
         if (!runIds[r]) {
@@ -2612,12 +2858,19 @@
           im.setAttribute("width", String(dl.runW));
           im.setAttribute("height", String(dl.runH));
           im.setAttribute("preserveAspectRatio", "none");
-          im.setAttribute("href", dl.runHref[r - 1]);
+          im.setAttribute("data-run", String(r));
+          im.setAttribute("href", ws.fx.runHref(r));
           D.el.appendChild(im);
         }
         const u = document.createElementNS(SVGNS, "use");
         u.setAttribute("class", "vellumwidget-detail-run");
         u.setAttribute("href", "#" + runIds[r]);
+        const mode = dl.runBlend ? dl.runBlend[r - 1] : "normal";
+        if (mode && mode !== "normal") u.style.setProperty("mix-blend-mode", mode);
+        if (!panHost[p]) {
+          const cid = rootClip(r);
+          if (cid) u.setAttribute("clip-path", "url(#" + cid + ")");
+        }
         groupFor(p).appendChild(u);
         if (chains[p]) chains[p].length = 0;
       };
@@ -2678,7 +2931,7 @@
       ws.markTier = "detail";
       ws.calib = null;
       ws.hoverSig = "";
-      if (ws.canvasEl) ws.canvasEl.style.display = "none";
+      ws.fx.hideCanvas();
       ws.fx.showMarksLayer(false);
       ws.fx.clearGroup(ws.selGroup);
       ws.fx.clearGroup(ws.hovGroup);
@@ -3460,7 +3713,8 @@
     function applyConditions() {
       if (!ws.interactions || !ws.interactions.conditions) return;
       const ring = ws.fx.ringMode();
-      if (ring && !ws.fx.condStatesBegin()) return;
+      const ms = ws.rasterMode && ws.fx.condStatesBegin();
+      if (ring && !ms) return;
       const selByName = {};
       (ws.interactions.selections || []).forEach((s) => selByName[s.name] = s);
       for (let ci = 0; ci < ws.interactions.conditions.length; ci++) {
@@ -3470,10 +3724,8 @@
         const sel = selByName[c.selection];
         const members = sel ? selectionMembers(sel) : {};
         const active = Object.keys(members).length > 0 || c.empty === false;
-        if (ring) {
-          ws.fx.condStateSet(tag, tagged, members, active, c.if_false);
-          continue;
-        }
+        if (ms) ws.fx.condStateSet(tag, tagged, members, active, c.if_false);
+        if (ring) continue;
         for (let i = 0; i < tagged.length; i++) {
           const nodes = ws.fx.elementsForKey(tagged[i]);
           const member = !!members[tagged[i]];
@@ -5292,7 +5544,7 @@
       ws.ptRGB = null;
       ws.ptN = 0;
       ws.ptAllRound = false;
-      if (ws.canvasEl) ws.canvasEl.style.display = "none";
+      hideCanvas();
       showMarksLayer(true);
     }
     function sampleBaseRaster() {
@@ -5356,7 +5608,7 @@
       if (!ws.rasterMode || !ws.canvasEl || !ws.ctx || !ws.vb || !ws.vb0) return;
       if (ws.dl) {
         if (ws.markTier === "detail") {
-          ws.canvasEl.style.display = "none";
+          hideCanvas();
           showMarksLayer(false);
           return;
         }
@@ -5455,8 +5707,9 @@
         return t.sx > 1.0001 || t.sy > 1.0001;
       }) : isZoomedIn(vb, vb0);
       const styled = ws.msActive && !!ws.msFlags && !!ws.msColor;
-      if (!(zoomed || styled && dl.exact) || !dl.n) {
-        ws.canvasEl.style.display = "none";
+      const blending = dl.exact && !!dl.runImgs && dl.blendRuns;
+      if (!(zoomed || styled && dl.exact || blending) || !dl.n) {
+        hideCanvas();
         showMarksLayer(true);
         return;
       }
@@ -5475,7 +5728,7 @@
         }
         if (vis > LIVE_DRAW_MAX) {
           if (!(stateOnly && wasShown)) {
-            ws.canvasEl.style.display = "none";
+            hideCanvas();
             showMarksLayer(true);
           }
           settleTimer = window.setTimeout(function() {
@@ -5489,7 +5742,55 @@
         }
       }
       showMarksLayer(!dl.exact);
-      paintList(ctx, dl, W, H, L, styled);
+      let used = 0;
+      const sink = blending ? {
+        next: function(mode) {
+          const c = blendLayer(used);
+          if (!c) return null;
+          const x = typeof c.getContext === "function" ? c.getContext("2d") : null;
+          if (!x) return null;
+          used++;
+          if (c.width !== W || c.height !== H) {
+            c.width = W;
+            c.height = H;
+          }
+          c.style.width = ws.canvasEl.style.width;
+          c.style.height = ws.canvasEl.style.height;
+          c.style.mixBlendMode = mode === "normal" ? "" : mode;
+          c.style.display = "block";
+          x.setTransform(1, 0, 0, 1, 0, 0);
+          x.clearRect(0, 0, W, H);
+          return x;
+        }
+      } : void 0;
+      paintList(ctx, dl, W, H, L, styled, sink);
+      hideLayers(used);
+    }
+    const layers = [];
+    function blendLayer(k) {
+      const base = ws.canvasEl;
+      if (!base || !base.parentNode) return null;
+      while (layers.length <= k) {
+        const c = document.createElement("canvas");
+        c.className = "vellumwidget-canvas-layer";
+        c.setAttribute("aria-hidden", "true");
+        const prev = layers.length ? layers[layers.length - 1] : base;
+        base.parentNode.insertBefore(c, prev.nextSibling);
+        layers.push(c);
+      }
+      return layers[k];
+    }
+    function hideLayers(keep) {
+      for (let k = keep; k < layers.length; k++) {
+        layers[k].style.display = "none";
+        layers[k].style.mixBlendMode = "";
+      }
+      const stage = ws.stage || ws.el;
+      if (stage && stage.classList) stage.classList.toggle("vellumwidget-blend-iso", keep > 0);
+    }
+    function hideCanvas() {
+      if (ws.canvasEl) ws.canvasEl.style.display = "none";
+      hideLayers(0);
     }
     function listLayout(dl, W, H) {
       const vb = ws.vb, vb0 = ws.vb0;
@@ -5517,8 +5818,9 @@
       }
       return { aff, gs, pclip, base: az ? base : kx };
     }
-    function paintList(ctx, dl, W, H, L, styled) {
+    function paintList(ctx0, dl, W, H, L, styled, sink) {
       const aff = L.aff, gs = L.gs, pclip = L.pclip, base = L.base, np = dl.panels.length;
+      let ctx = ctx0;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, H);
       const flags = styled ? ws.msFlags : null, recol = styled ? ws.msColor : null, pal = ws.msPalette;
@@ -5593,10 +5895,23 @@
       };
       const runImgs = dl.runImgs;
       const drawnRun = [];
+      const runPanels = [];
+      const runLoose = [];
+      const anyPclip = pclip.some((c) => !!c);
+      if (runImgs && anyPclip) {
+        for (let i = 0; i < dl.n; i++) {
+          const r = dl.run[i];
+          if (!(r > 0)) continue;
+          const p = dl.panel[i] <= np ? dl.panel[i] : 0;
+          if (pclip[p]) (runPanels[r] = runPanels[r] || {})[p] = true;
+          else (runLoose[r] = runLoose[r] || []).push(dl.bx0[i], dl.by0[i], dl.bx1[i], dl.by1[i]);
+        }
+      }
+      let op = "";
       const drawRun = function(r) {
-        const img = runImgs[r - 1];
+        const img = ws.fx.runImage(r);
         if (!img) return;
-        const one = function(A, pc) {
+        const one = function(A, pc, boxes) {
           ctx.save();
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           if (pc) {
@@ -5604,16 +5919,28 @@
             ctx.rect(pc[0], pc[1], pc[2] - pc[0], pc[3] - pc[1]);
             ctx.clip();
           }
+          if (boxes) {
+            ctx.beginPath();
+            for (let q = 0; q < boxes.length; q += 4) {
+              const x0 = A.ax * (boxes[q] - RUN_BOX_PAD) + A.bx, y0 = A.ay * (boxes[q + 1] - RUN_BOX_PAD) + A.by;
+              ctx.rect(x0, y0, A.ax * (boxes[q + 2] - boxes[q] + 2 * RUN_BOX_PAD), A.ay * (boxes[q + 3] - boxes[q + 1] + 2 * RUN_BOX_PAD));
+            }
+            ctx.clip();
+          }
           ctx.setTransform(A.ax, 0, 0, A.ay, A.bx, A.by);
+          if (op) ctx.globalCompositeOperation = op;
           ctx.drawImage(img, 0, 0, dl.runW, dl.runH);
           ctx.restore();
         };
-        let any = false;
-        for (let p = 1; p <= np; p++) if (pclip[p]) {
-          one(aff[p], pclip[p]);
-          any = true;
+        if (!anyPclip) {
+          one(aff[0], null);
+          return;
         }
-        if (!any) one(aff[0], null);
+        const hosted = runPanels[r];
+        if (hosted) {
+          for (let p = 1; p <= np; p++) if (hosted[p]) one(aff[p], pclip[p]);
+        }
+        if (runLoose[r]) one(aff[0], null, runLoose[r]);
       };
       let curGroup = 0;
       tgt.save();
@@ -5628,7 +5955,18 @@
             }
             flush();
             tgt.restore();
-            drawRun(r);
+            const mode = dl.runBlend ? dl.runBlend[r - 1] : "normal";
+            const lay = mode !== "normal" && sink ? sink.next(mode) : null;
+            if (lay) {
+              ctx = lay;
+              drawRun(r);
+              ctx = sink.next("normal") || lay;
+              tgt = ctx;
+            } else {
+              op = mode !== "normal" ? mode : "";
+              drawRun(r);
+              op = "";
+            }
             tgt.save();
             curState = -1;
             curPaint = -1;
@@ -5752,15 +6090,47 @@
       c.width = W;
       c.height = H;
       const styled = ws.msActive && !!ws.msFlags && !!ws.msColor;
-      if (dl.n) paintList(ctx, dl, W, H, listLayout(dl, W, H), styled);
-      let href = "";
-      try {
-        href = c.toDataURL("image/png");
-      } catch (e) {
-        return null;
+      const extra = [];
+      let failed = false;
+      const sink = dl.blendRuns && dl.runImgs ? {
+        next: function(mode) {
+          const lc = document.createElement("canvas");
+          const lx = typeof lc.getContext === "function" ? lc.getContext("2d") : null;
+          if (!lx) {
+            failed = true;
+            return null;
+          }
+          lc.width = W;
+          lc.height = H;
+          lx.setTransform(1, 0, 0, 1, 0, 0);
+          lx.clearRect(0, 0, W, H);
+          extra.push({ c: lc, blend: mode });
+          return lx;
+        }
+      } : void 0;
+      if (dl.n) paintList(ctx, dl, W, H, listLayout(dl, W, H), styled, sink);
+      if (failed) return null;
+      const url = function(cv) {
+        let h = "";
+        try {
+          h = cv.toDataURL("image/png");
+        } catch (e) {
+          return null;
+        }
+        return /^data:image\/png/.test(h || "") ? h : null;
+      };
+      const href = url(c);
+      if (!href) return null;
+      const out = { href, x: frame.x, y: frame.y, w: frame.w, h: frame.h };
+      if (extra.length) {
+        out.layers = [];
+        for (let k = 0; k < extra.length; k++) {
+          const h = url(extra[k].c);
+          if (!h) return null;
+          out.layers.push({ href: h, blend: extra[k].blend });
+        }
       }
-      if (!/^data:image\/png/.test(href || "")) return null;
-      return { href, x: frame.x, y: frame.y, w: frame.w, h: frame.h };
+      return out;
     }
     function withAlphaOf(c, ref) {
       if (/^#[0-9a-fA-F]{6}$/.test(c) && /^#[0-9a-fA-F]{8}$/.test(ref)) {
@@ -5843,7 +6213,7 @@
     function setHover(k) {
       setHoverKeys(ws.fx.linkedKeys(k));
     }
-    return { ensureCanvas, clearPointData, sampleBaseRaster, drawPoints, clearGroup, drawSelFeedback, setHoverKeys, setHover, showMarksLayer, exportMarksImage };
+    return { ensureCanvas, clearPointData, sampleBaseRaster, drawPoints, clearGroup, drawSelFeedback, setHoverKeys, setHover, showMarksLayer, exportMarksImage, hideCanvas };
   }
 
   // srcts/ink.ts
@@ -6092,6 +6462,7 @@
       if (!dl || !dl.covered || !dl.nRuns) return;
       const hrefs = asColumn(f.runs).map(String);
       if (hrefs.length !== dl.nRuns) return;
+      ws.runSvg = runSvgsOf(f.svg, dl.nRuns);
       const imgs = [];
       let left = hrefs.length;
       for (let k = 0; k < hrefs.length; k++) {
@@ -6099,6 +6470,7 @@
         im.onload = function() {
           if (--left > 0 || ws.dl !== dl) return;
           if (attachRuns(dl, imgs, hrefs, Number(f.width), Number(f.height))) {
+            ws.fx.restyleRuns();
             ws.fx.drawPoints();
             ws.fx.scheduleTier();
           }
@@ -6117,6 +6489,7 @@
       );
       ws.elements = normalizeElements(x.elements);
       ws.dl = x.options && x.options.raster && x.displayList ? decodeDisplayList(x.displayList) : null;
+      ws.runSvg = null;
       if (ws.dl) fillBboxes(ws.elements, ws.dl);
       ws.panels = normalizePanels(x.panels);
       ws.colorbar = x.colorbar || null;
@@ -6631,15 +7004,19 @@
       if (listed) {
         const old = svg.querySelectorAll(".vellumwidget-marks, .vellumwidget-marks-defs, .vellumwidget-detail");
         for (let i = 0; i < old.length; i++) old[i].remove();
-        const img = document.createElementNS(SVGNS, "image");
-        img.setAttribute("class", "vellumwidget-marks-export");
-        img.setAttribute("x", String(listed.x));
-        img.setAttribute("y", String(listed.y));
-        img.setAttribute("width", String(listed.w));
-        img.setAttribute("height", String(listed.h));
-        img.setAttribute("preserveAspectRatio", "none");
-        img.setAttribute("href", listed.href);
-        svg.appendChild(img);
+        const parts = [{ href: listed.href, blend: "normal" }].concat(listed.layers || []);
+        for (let k = 0; k < parts.length; k++) {
+          const img = document.createElementNS(SVGNS, "image");
+          img.setAttribute("class", "vellumwidget-marks-export");
+          img.setAttribute("x", String(listed.x));
+          img.setAttribute("y", String(listed.y));
+          img.setAttribute("width", String(listed.w));
+          img.setAttribute("height", String(listed.h));
+          img.setAttribute("preserveAspectRatio", "none");
+          if (parts[k].blend !== "normal") img.setAttribute("style", "mix-blend-mode:" + parts[k].blend);
+          img.setAttribute("href", parts[k].href);
+          svg.appendChild(img);
+        }
       } else {
         const drawn = svg.querySelectorAll(".vellumwidget-marks");
         for (let i = 0; i < drawn.length; i++) drawn[i].style.visibility = "";
@@ -6989,6 +7366,7 @@
       msPalette: [],
       msActive: false,
       msDimAlpha: 0.28,
+      runSvg: null,
       detailGroups: [],
       detailKeys: [],
       selGroup: null,
@@ -7096,7 +7474,8 @@
         renderFeature(ws),
         a11yFeature(ws),
         detailFeature(ws),
-        markStateFeature(ws)
+        markStateFeature(ws),
+        runStyleFeature(ws)
       );
       ensureStyle();
       el.classList.add("vellumwidget-root");
@@ -7153,6 +7532,8 @@
           runsAttached: function() {
             return !!(ws.dl && ws.dl.runImgs);
           },
+          runStyled: ws.fx.runStyled,
+          exportMarksImage: ws.fx.exportMarksImage,
           condTags: function() {
             return Object.keys(ws.condTagElems).map(function(k) {
               return k + "=" + ws.condTagElems[k].length;
