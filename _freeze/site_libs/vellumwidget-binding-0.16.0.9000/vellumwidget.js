@@ -323,9 +323,25 @@
       return a;
     }
     const bytes = b64bytes(c.data || "");
+    if (c.step != null) {
+      const w = c.type === "u8" ? 1 : c.type === "u16" ? 2 : 3;
+      const lo = Number(c.lo) || 0, step = Number(c.step), a = new Float32Array(n);
+      if (w === 1) for (let i = 0; i < n; i++) a[i] = lo + bytes[i] * step;
+      else if (w === 2) for (let i = 0, p = 0; i < n; i++, p += 2) a[i] = lo + (bytes[p] | bytes[p + 1] << 8) * step;
+      else for (let i = 0, p = 0; i < n; i++, p += 3) a[i] = lo + (bytes[p] | bytes[p + 1] << 8 | bytes[p + 2] << 16) * step;
+      return a;
+    }
     if (c.bits) {
       const k = Number(c.bits), a = make(n);
       let pos = 0;
+      if (k <= 24) {
+        const mask = (1 << k) - 1;
+        for (let i = 0; i < n; i++, pos += k) {
+          const o = pos >> 3;
+          a[i] = (bytes[o] | bytes[o + 1] << 8 | bytes[o + 2] << 16 | bytes[o + 3] << 24) >>> (pos & 7) & mask;
+        }
+        return a;
+      }
       for (let i = 0; i < n; i++) {
         let v = 0;
         for (let b = 0; b < k; b++, pos++) if (bytes[pos >> 3] & 1 << (pos & 7)) v += 2 ** b;
@@ -339,23 +355,48 @@
     if (c.type === "u32") return new Uint32Array(buf, 0, n);
     return new Uint8Array(buf, 0, n);
   }
+  function decodeDeltas(db, dx, dv, json) {
+    if (db == null) return asColumn(json);
+    const d = Float64Array.from(dlColumn(db)), at = asColumn(dx), val = asColumn(dv);
+    for (let k = 0; k < at.length; k++) d[at[k]] = val[k];
+    return d;
+  }
   var KEY_INT = /(0|[1-9][0-9]{0,14})$/;
   function decodeTemplate(o, n, keys) {
     const tpl = asColumn(o.tpl).map((p) => asColumn(p).map(String));
     const tc = dlColumn(o.tc);
-    const streams = asColumn(o.tn).map((st) => {
+    const keyW = [];
+    const streams = asColumn(o.tn).map((st, j) => {
       if (st === "key") return null;
       const s = st;
-      if (s.d != null) {
-        const d = asColumn(s.d), out2 = new Array(d.length);
+      if (s.key != null) {
+        const wc = typeof s.w === "object" ? dlColumn(s.w) : null, w0 = Number(s.w) || 0;
+        let k = 0;
+        keyW[j] = wc ? () => wc[k++] : () => w0;
+        return null;
+      }
+      let out2;
+      if (s.d != null || s.db != null) {
+        const d = decodeDeltas(s.db, s.dx, s.dv, s.d);
+        out2 = new Array(d.length);
         let run = 0;
         for (let i = 0; i < d.length; i++) {
           run += d[i];
           out2[i] = String(run);
         }
-        return out2;
+      } else if (s.vb != null) {
+        out2 = Array.from(dlColumn(s.vb), String);
+      } else {
+        out2 = asColumn(s.v).map(String);
       }
-      return asColumn(s.v).map(String);
+      if (s.w != null) {
+        const wc = typeof s.w === "object" ? dlColumn(s.w) : null, w0 = Number(s.w);
+        for (let i = 0; i < out2.length; i++) {
+          const w = wc ? wc[i] : w0;
+          if (out2[i].length < w) out2[i] = "0".repeat(w - out2[i].length) + out2[i];
+        }
+      }
+      return out2;
     });
     const at = new Array(streams.length).fill(0);
     const out = new Array(n);
@@ -373,6 +414,11 @@
         if (st === null) {
           const m = keys && keys[i] != null ? KEY_INT.exec(keys[i]) : null;
           num = m ? m[1] : "";
+          const pw = keyW[j - 1];
+          if (pw) {
+            const w = pw(i);
+            if (num.length < w) num = "0".repeat(w - num.length) + num;
+          }
         } else if (st) {
           num = st[at[j - 1]++];
         }
@@ -431,9 +477,10 @@
     return asColumn(v);
   }
   function decodeKeys(v) {
-    if (v != null && typeof v === "object" && !Array.isArray(v) && "delta" in v) {
+    if (v != null && typeof v === "object" && !Array.isArray(v) && ("delta" in v || "db" in v)) {
       const o = v;
-      const delta = asColumn(o.delta), at = asColumn(o.at), other = asColumn(o.v);
+      const delta = decodeDeltas(o.db, o.dx, o.dv, o.delta);
+      const at = asColumn(o.at), other = asColumn(o.v);
       const pre = o.pre != null ? decodeColumn(o.pre, delta.length) : null;
       const n = delta.length + at.length;
       const out = new Array(n);
@@ -451,6 +498,38 @@
     }
     return asColumn(v).map(String);
   }
+  function decodeBbox(b) {
+    const n = Number(b.n) || 0;
+    const lo = asColumn(b.lo).map(Number);
+    const ux = dlColumn(b.x0), uy = dlColumn(b.y0);
+    const uw = dlColumn(b.w), uh = dlColumn(b.h);
+    const x0 = new Array(n), y0 = new Array(n);
+    const x1 = new Array(n), y1 = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const gx = lo[0] + ux[i], gy = lo[1] + uy[i];
+      x0[i] = gx / 100;
+      y0[i] = gy / 100;
+      x1[i] = (gx + lo[2] + uw[i]) / 100;
+      y1[i] = (gy + lo[3] + uh[i]) / 100;
+    }
+    const na = asColumn(b.na);
+    for (let k = 0; k < na.length; k++) {
+      const i = na[k];
+      x0[i] = y0[i] = x1[i] = y1[i] = null;
+    }
+    if (b.ex) {
+      const at = asColumn(b.ex.at), ex0 = asColumn(b.ex.x0), ey0 = asColumn(b.ex.y0);
+      const ex1 = asColumn(b.ex.x1), ey1 = asColumn(b.ex.y1);
+      for (let k = 0; k < at.length; k++) {
+        const i = at[k];
+        x0[i] = ex0[k];
+        y0[i] = ey0[k];
+        x1[i] = ex1[k];
+        y1[i] = ey1[k];
+      }
+    }
+    return { x0, y0, x1, y1 };
+  }
   function normalizeElements(raw) {
     if (raw == null) return [];
     if (Array.isArray(raw)) return raw;
@@ -458,11 +537,12 @@
     const key = decodeKeys(c.key);
     const n = key.length;
     if (!n) return [];
-    const x0 = asColumn(c.x0);
-    const y0 = asColumn(c.y0);
-    const x1 = asColumn(c.x1);
-    const y1 = asColumn(c.y1);
     const col = (f) => decodeColumn(c[f], n, key);
+    const bb = c.bbox ? decodeBbox(c.bbox) : null;
+    const x0 = bb ? bb.x0 : col("x0") || [];
+    const y0 = bb ? bb.y0 : col("y0") || [];
+    const x1 = bb ? bb.x1 : col("x1") || [];
+    const y1 = bb ? bb.y1 : col("y1") || [];
     const mark = col("mark");
     const tooltip = col("tooltip");
     const hoverGroup = col("hover_group");
@@ -1043,12 +1123,169 @@
     return { a11yLabel, announce, focusRoving, markFocused, setupA11y };
   }
 
+  // srcts/geometry.ts
+  function rectsIntersect(a, b) {
+    return a.x0 <= b.x1 && a.x1 >= b.x0 && a.y0 <= b.y1 && a.y1 >= b.y0;
+  }
+  function distToBbox(x, y, b) {
+    const dx = Math.max(b.x0 - x, 0, x - b.x1);
+    const dy = Math.max(b.y0 - y, 0, y - b.y1);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  function hasBbox(e) {
+    return typeof e.x0 === "number" && typeof e.y0 === "number";
+  }
+  function isRoundMark(mark) {
+    return mark === "point" || mark === "points" || mark === "circle" || mark === "circles";
+  }
+  function distToSegment2(x, y, ax, ay, bx, by) {
+    const vx = bx - ax, vy = by - ay;
+    const len2 = vx * vx + vy * vy;
+    let t = len2 > 0 ? ((x - ax) * vx + (y - ay) * vy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const dx = x - (ax + t * vx), dy = y - (ay + t * vy);
+    return dx * dx + dy * dy;
+  }
+  function distToGeom(x, y, g, gx, gy, box) {
+    const at = g.at, n = g.n;
+    if (n <= 0) return Infinity;
+    if (g.kind === "point") {
+      const dx = x - gx[at], dy = y - gy[at];
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const r = box ? Math.min(box.x1 - box.x0, box.y1 - box.y0) / 2 : 0;
+      return d > r ? d - r : 0;
+    }
+    if (n === 1) {
+      const dx = x - gx[at], dy = y - gy[at];
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    if (g.kind === "rect" || g.kind === "text" || g.kind === "roundrect") {
+      return distToBbox(x, y, {
+        x0: Math.min(gx[at], gx[at + 1]),
+        x1: Math.max(gx[at], gx[at + 1]),
+        y0: Math.min(gy[at], gy[at + 1]),
+        y1: Math.max(gy[at], gy[at + 1])
+      });
+    }
+    const closed = g.kind === "polygon" || g.kind === "path" || g.kind === "hexagon" || g.kind === "sector";
+    const rings = g.rings || [n];
+    let best = Infinity;
+    let cross = 0;
+    let wind = 0;
+    let ra = at;
+    for (let r = 0; r < rings.length; r++) {
+      const rn = rings[r] | 0;
+      if (rn <= 0) continue;
+      if (closed && rn >= 3) {
+        for (let i = 0, j = rn - 1; i < rn; j = i++) {
+          const xi = gx[ra + i], yi = gy[ra + i];
+          const xj = gx[ra + j], yj = gy[ra + j];
+          if (yi > y !== yj > y) {
+            if (x < (xj - xi) * (y - yi) / (yj - yi) + xi) cross++;
+            const side = (xi - xj) * (y - yj) - (x - xj) * (yi - yj);
+            if (yi > yj) {
+              if (side > 0) wind++;
+            } else if (side < 0) wind--;
+          }
+        }
+      }
+      for (let i = 1; i < rn; i++) {
+        const d2 = distToSegment2(x, y, gx[ra + i - 1], gy[ra + i - 1], gx[ra + i], gy[ra + i]);
+        if (d2 < best) best = d2;
+      }
+      if (closed && rn >= 3) {
+        const d2 = distToSegment2(x, y, gx[ra + rn - 1], gy[ra + rn - 1], gx[ra], gy[ra]);
+        if (d2 < best) best = d2;
+      }
+      ra += rn;
+    }
+    if (closed && (g.evenodd ? (cross & 1) === 1 : wind !== 0)) return 0;
+    return Math.sqrt(best);
+  }
+  function unionBbox(elems, keys) {
+    let out = null;
+    for (let i = 0; i < elems.length; i++) {
+      const e = elems[i];
+      if (!hasBbox(e) || !keys[e.key]) continue;
+      if (!out) out = { x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1 };
+      else {
+        out.x0 = Math.min(out.x0, e.x0);
+        out.y0 = Math.min(out.y0, e.y0);
+        out.x1 = Math.max(out.x1, e.x1);
+        out.y1 = Math.max(out.y1, e.y1);
+      }
+    }
+    return out;
+  }
+  function mul6(m, n) {
+    return [
+      m[0] * n[0] + m[2] * n[1],
+      m[1] * n[0] + m[3] * n[1],
+      m[0] * n[2] + m[2] * n[3],
+      m[1] * n[2] + m[3] * n[3],
+      m[0] * n[4] + m[2] * n[5] + m[4],
+      m[1] * n[4] + m[3] * n[5] + m[5]
+    ];
+  }
+  function parseTransformList(t) {
+    const s = (t || "").trim();
+    if (!s) return null;
+    const re = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
+    let m = [1, 0, 0, 1, 0, 0];
+    let any = false, rest = s, f;
+    while ((f = re.exec(s)) !== null) {
+      rest = rest.replace(f[0], "");
+      const v = f[2].trim() === "" ? [] : f[2].trim().split(/[\s,]+/).map(Number);
+      if (v.some((x) => !isFinite(x))) return null;
+      let n;
+      switch (f[1]) {
+        case "matrix":
+          if (v.length !== 6) return null;
+          n = [v[0], v[1], v[2], v[3], v[4], v[5]];
+          break;
+        case "translate":
+          if (v.length < 1 || v.length > 2) return null;
+          n = [1, 0, 0, 1, v[0], v.length > 1 ? v[1] : 0];
+          break;
+        case "scale":
+          if (v.length < 1 || v.length > 2) return null;
+          n = [v[0], 0, 0, v.length > 1 ? v[1] : v[0], 0, 0];
+          break;
+        case "rotate": {
+          if (v.length !== 1 && v.length !== 3) return null;
+          const r = v[0] * Math.PI / 180, co = Math.cos(r), si = Math.sin(r);
+          const cx = v.length === 3 ? v[1] : 0, cy = v.length === 3 ? v[2] : 0;
+          n = [co, si, -si, co, cx - co * cx + si * cy, cy - si * cx - co * cy];
+          break;
+        }
+        case "skewX":
+          if (v.length !== 1) return null;
+          n = [1, 0, Math.tan(v[0] * Math.PI / 180), 1, 0, 0];
+          break;
+        case "skewY":
+          if (v.length !== 1) return null;
+          n = [1, Math.tan(v[0] * Math.PI / 180), 0, 1, 0, 0];
+          break;
+        default:
+          return null;
+      }
+      m = mul6(m, n);
+      any = true;
+    }
+    if (!any || rest.replace(/[\s,]/g, "") !== "") return null;
+    return m;
+  }
+  function applyAffine6(m, x, y) {
+    return { x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] };
+  }
+
   // srcts/features/constants.ts
   var DIM_OVERLAY_MIN = 2e3;
   var OVERLAY_MARK_CAP = 2e3;
   var PICK_CANDIDATES = 256;
   var LIVE_DRAW_MAX = 5e4;
   var SETTLE_MS = 120;
+  var DEFAULT_MAX_ZOOM = 100;
   var SVGNS = "http://www.w3.org/2000/svg";
   var TIP_MULTI_CAP = 30;
   var MODE_ICON = { brush: "\u25AD", lasso: "\u25CC", pan: "\u270B" };
@@ -1736,6 +1973,43 @@
     const h = vb.h / factor;
     return { x: cx - (cx - vb.x) / factor, y: cy - (cy - vb.y) / factor, w, h };
   }
+  function zoomCap(maxZoom) {
+    return typeof maxZoom === "number" && isFinite(maxZoom) && maxZoom >= 1 ? maxZoom : 0;
+  }
+  var CAP_EPS = 1e-9;
+  function clampZoomFactor(vb, vb0, factor, maxZoom) {
+    const cap = zoomCap(maxZoom);
+    if (!cap || !(factor > 1) || !(vb0.w > 0) || !(vb0.h > 0)) return factor;
+    const room = Math.min(vb.w * cap / vb0.w, vb.h * cap / vb0.h);
+    if (!(room > 1 + CAP_EPS)) return 1;
+    return Math.min(factor, room);
+  }
+  function zoomViewBoxCapped(vb, vb0, factor, cx, cy, maxZoom) {
+    const f = vb0 ? clampZoomFactor(vb, vb0, factor, maxZoom) : factor;
+    return f === 1 ? vb : zoomViewBox(vb, f, cx, cy);
+  }
+  function clampViewBox(vb, vb0, maxZoom) {
+    const cap = zoomCap(maxZoom);
+    if (!cap || !vb0 || !(vb0.w > 0) || !(vb0.h > 0)) return vb;
+    const wMin = vb0.w / cap, hMin = vb0.h / cap;
+    const narrowW = vb.w < wMin * (1 - CAP_EPS), narrowH = vb.h < hMin * (1 - CAP_EPS);
+    if (!narrowW && !narrowH) return vb;
+    const out = { x: vb.x, y: vb.y, w: vb.w, h: vb.h };
+    if (narrowW) {
+      out.x = vb.x + vb.w / 2 - wMin / 2;
+      out.w = wMin;
+    }
+    if (narrowH) {
+      out.y = vb.y + vb.h / 2 - hMin / 2;
+      out.h = hMin;
+    }
+    return out;
+  }
+  function atMaxZoom(vb, vb0, maxZoom) {
+    const cap = zoomCap(maxZoom);
+    if (!cap || !vb0) return false;
+    return vb.w <= vb0.w / cap * (1 + CAP_EPS) || vb.h <= vb0.h / cap * (1 + CAP_EPS);
+  }
   function parseViewBox(s) {
     if (!s) return null;
     const p = s.trim().split(/[ ,]+/).map(Number);
@@ -1930,23 +2204,11 @@
     function constantText(n) {
       if (n.style.getPropertyValue("transform")) return;
       const own = (n.getAttribute("transform") || "").trim();
-      const place = transAsCss(n);
-      if (own && !place) return;
-      const x = parseFloat(n.getAttribute("x") || "") || 0, y = parseFloat(n.getAttribute("y") || "") || 0;
-      let X = x, Y = y;
-      const m = /matrix\(([^)]*)\)/.exec(place);
-      if (m) {
-        const v = m[1].split(",").map(Number);
-        X = v[0] * x + v[2] * y + v[4];
-        Y = v[1] * x + v[3] * y + v[5];
-      } else {
-        const t = /translate\(([-+\d.eE]+)px,([-+\d.eE]+)px\)/.exec(place);
-        if (t) {
-          X = x + Number(t[1]);
-          Y = y + Number(t[2]);
-        }
-      }
+      if (own && !parseTransformList(own)) return;
+      const A = anchorThrough(n);
+      const X = A.x, Y = A.y;
       if (!isFinite(X) || !isFinite(Y)) return;
+      const place = transAsCss(n);
       n.style.setProperty("transform-box", "view-box");
       n.style.setProperty("transform-origin", "0px 0px");
       n.style.setProperty(
@@ -1956,32 +2218,21 @@
     }
     function transAsCss(node) {
       const t = (node.getAttribute("transform") || "").trim();
-      if (!t) return "";
-      const N = "([-+\\d.eE]+)";
-      const m = new RegExp(
-        "matrix\\(\\s*" + [N, N, N, N, N, N].join("[\\s,]+") + "\\s*\\)"
-      ).exec(t);
-      if (m) {
-        const v = m.slice(1, 7).map(Number);
-        if (v.some(function(x) {
-          return !isFinite(x);
-        })) return "";
-        return "matrix(" + v.join(",") + ")";
-      }
-      const tr = new RegExp(
-        "translate\\(\\s*" + N + "(?:[\\s,]+" + N + ")?\\s*\\)"
-      ).exec(t);
-      if (tr) {
-        const tx = Number(tr[1]), ty = tr[2] === void 0 ? 0 : Number(tr[2]);
-        if (!isFinite(tx) || !isFinite(ty)) return "";
-        return "translate(" + tx + "px," + ty + "px)";
-      }
-      return "";
+      const m = parseTransformList(t);
+      if (!m) return "";
+      if (/^(\s*translate\([^)]*\)\s*)+$/.test(t)) return "translate(" + m[4] + "px," + m[5] + "px)";
+      return "matrix(" + m.join(",") + ")";
     }
-    function transTranslate(node) {
-      const t = node.getAttribute("transform") || "";
-      const m = /matrix\(\s*[-\d.eE]+\s+[-\d.eE]+\s+[-\d.eE]+\s+[-\d.eE]+\s+([-\d.eE]+)\s+([-\d.eE]+)\s*\)/.exec(t) || /translate\(\s*([-\d.eE]+)[ ,]+([-\d.eE]+)\s*\)/.exec(t);
-      return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]) } : { tx: 0, ty: 0 };
+    function anchorThrough(node) {
+      const x = parseFloat(node.getAttribute("x") || "") || 0, y = parseFloat(node.getAttribute("y") || "") || 0;
+      const m = parseTransformList(node.getAttribute("transform"));
+      return m ? applyAffine6(m, x, y) : { x, y };
+    }
+    function rotationOf(node) {
+      const m = parseTransformList(node.getAttribute("transform"));
+      if (!m) return 0;
+      const r = Math.atan2(m[1], m[0]) * 180 / Math.PI;
+      return Math.abs(r) < 1e-6 ? 0 : Math.round(r * 1e6) / 1e6;
     }
     function scrapeAxisStyle() {
       if (!ws.svgEl) return;
@@ -2012,9 +2263,8 @@
         let first = null;
         const along = [], labs = [];
         for (let i = 0; i < texts.length; i++) {
-          const tr = transTranslate(texts[i]);
-          const x = tr.tx + (parseFloat(texts[i].getAttribute("x") || "") || 0);
-          const y = tr.ty + (parseFloat(texts[i].getAttribute("y") || "") || 0);
+          const at = anchorThrough(texts[i]);
+          const x = at.x, y = at.y;
           along.push(isX ? x : y);
           labs.push(texts[i].textContent || "");
           if (!first) first = { x, y };
@@ -2045,13 +2295,15 @@
         }
         if (!best) continue;
         const t0 = texts[0];
+        const rot = rotationOf(t0);
         const anchor = {
           pos: isX ? first.y : first.x,
           // x labels centre on their tick (vellum centres wrapped lines itself, with
           // a start anchor and per-line offsets, so its anchor isn't reusable there).
-          anchor: isX ? "middle" : t0.getAttribute("text-anchor") || "end",
+          anchor: isX && !rot ? "middle" : t0.getAttribute("text-anchor") || (isX ? "middle" : "end"),
           baseline: t0.getAttribute("dominant-baseline") || (isX ? "text-before-edge" : "central"),
-          gap
+          gap: rot ? 0 : gap,
+          rot
         };
         if (isSec) {
           const p = best.p;
@@ -2210,7 +2462,7 @@
       l.setAttribute("stroke-width", String(ws.axisStyle.gridWidth));
       return l;
     }
-    function axisLabel(text, x, y, anchor, baseline) {
+    function axisLabel(text, x, y, anchor, baseline, rot) {
       const t = document.createElementNS(SVGNS, "text");
       t.setAttribute("x", String(x));
       t.setAttribute("y", String(y));
@@ -2219,6 +2471,7 @@
       t.setAttribute("font-size", String(ws.axisStyle.fontSize));
       t.setAttribute("text-anchor", anchor);
       t.setAttribute("dominant-baseline", baseline);
+      if (rot) t.setAttribute("transform", "rotate(" + rot + " " + x + " " + y + ")");
       t.textContent = text;
       return t;
     }
@@ -2259,7 +2512,7 @@
           grid.appendChild(gridLine(sx, p.py0, sx, p.py1));
           if (a.xTick) ticks_.push(tickLine(a.xTick, sx, p));
           if (a.xLab) {
-            const lab = axisLabel(ticks[i].label, sx, a.xLab.pos, a.xLab.anchor, a.xLab.baseline);
+            const lab = axisLabel(ticks[i].label, sx, a.xLab.pos, a.xLab.anchor, a.xLab.baseline, a.xLab.rot);
             if (a.xLab.gap > 0) wrapLabel(lab, ticks[i].label, sx, a.xLab.gap);
             layer.appendChild(lab);
           }
@@ -2269,7 +2522,7 @@
           for (let i = 0; i < st.length; i++) {
             const sx = t.sx * (p.px0 + (st[i].n - ax.native_lo) / k) + t.tx;
             if (!isFinite(sx) || sx < p.px0 - 0.5 || sx > p.px1 + 0.5) continue;
-            layer.appendChild(axisLabel(st[i].label, sx, a.x2Lab.pos, a.x2Lab.anchor, a.x2Lab.baseline));
+            layer.appendChild(axisLabel(st[i].label, sx, a.x2Lab.pos, a.x2Lab.anchor, a.x2Lab.baseline, a.x2Lab.rot));
           }
         }
       }
@@ -2286,7 +2539,7 @@
           grid.appendChild(gridLine(p.px0, sy, p.px1, sy));
           if (a.yTick) ticks_.push(tickLine(a.yTick, sy, p));
           if (a.yLab) {
-            layer.appendChild(axisLabel(ticks[i].label, a.yLab.pos, sy, a.yLab.anchor, a.yLab.baseline));
+            layer.appendChild(axisLabel(ticks[i].label, a.yLab.pos, sy, a.yLab.anchor, a.yLab.baseline, a.yLab.rot));
           }
         }
         if (a.y2Lab && a.y2Map) {
@@ -2294,7 +2547,7 @@
           for (let i = 0; i < st.length; i++) {
             const sy = t.sy * (p.py0 + (ay.native_hi - st[i].n) / k) + t.ty;
             if (!isFinite(sy) || sy < p.py0 - 0.5 || sy > p.py1 + 0.5) continue;
-            layer.appendChild(axisLabel(st[i].label, a.y2Lab.pos, sy, a.y2Lab.anchor, a.y2Lab.baseline));
+            layer.appendChild(axisLabel(st[i].label, a.y2Lab.pos, sy, a.y2Lab.anchor, a.y2Lab.baseline, a.y2Lab.rot));
           }
         }
       }
@@ -2424,6 +2677,8 @@
   }
 
   // srcts/features/runStyle.ts
+  var ATLAS_GAP = 4;
+  var ATLAS_MAX = 4e3;
   var CACHE_PER_RUN = 4;
   function runStyleFeature(ws) {
     let forDl = null;
@@ -2434,6 +2689,10 @@
     let cache = [];
     let cur = [];
     let want = [];
+    let geos = [];
+    let geoDl = null;
+    let svgBroken = [];
+    let splits = [];
     function sync() {
       const dl = ws.dl;
       if (!dl || !dl.runImgs || !ws.runSvg) {
@@ -2456,6 +2715,8 @@
       cache = [];
       cur = [];
       want = [];
+      geos = [];
+      splits = [];
       return true;
     }
     function sigOf(r) {
@@ -2481,36 +2742,32 @@
       docs[r] = el;
       return el;
     }
-    function render(r, sig) {
-      const dl = ws.dl, root = docFor(r);
-      if (!root) return null;
-      const svg = root.cloneNode(true);
+    function styleNode(n, k) {
       const flags = ws.msFlags, color = ws.msColor, pal = ws.msPalette;
-      const nodes = Array.prototype.slice.call(svg.querySelectorAll("[data-key]"));
-      for (let i = 0; i < nodes.length; i++) {
-        const n = nodes[i];
-        const k2 = keyIdx.get(n.getAttribute("data-key") || "");
-        if (k2 == null) continue;
-        const f = flags[k2], c = color[k2];
-        if (f & MS_HIDDEN) {
-          if (n.parentNode) n.parentNode.removeChild(n);
-          continue;
-        }
-        let st = n.getAttribute("style") || "";
-        if (c) {
-          const col = pal[c - 1];
-          const fa = n.getAttribute("fill"), sa = n.getAttribute("stroke");
-          if (fa && fa !== "none") st += ";fill:" + col;
-          if (sa && sa !== "none") st += ";stroke:" + col;
-        }
-        if (f & MS_DIM) st += ";opacity:" + ws.msDimAlpha;
-        else if (f & MS_MUTED) st += ";opacity:" + MUTED_ALPHA;
-        if (st) n.setAttribute("style", st.replace(/^;/, ""));
+      if (!flags || !color) return true;
+      const f = flags[k], c = color[k];
+      if (f & MS_HIDDEN) return false;
+      let st = n.getAttribute("style") || "";
+      if (c) {
+        const col = pal[c - 1];
+        const fa = n.getAttribute("fill"), sa = n.getAttribute("stroke");
+        if (fa && fa !== "none") st += ";fill:" + col;
+        if (sa && sa !== "none") st += ";stroke:" + col;
       }
+      if (f & MS_DIM) st += ";opacity:" + ws.msDimAlpha;
+      else if (f & MS_MUTED) st += ";opacity:" + MUTED_ALPHA;
+      if (st) n.setAttribute("style", st.replace(/^;/, ""));
+      return true;
+    }
+    function pngScale(r) {
+      const dl = ws.dl;
       const png = dl.runImgs[r];
-      const k = png && png.naturalWidth > 0 && dl.runW > 0 ? png.naturalWidth / dl.runW : 2;
-      svg.setAttribute("width", String(Math.round(dl.runW * k)));
-      svg.setAttribute("height", String(Math.round(dl.runH * k)));
+      return png && png.naturalWidth > 0 && dl.runW > 0 ? png.naturalWidth / dl.runW : 2;
+    }
+    function rasterise(svg, w, h, k, done) {
+      const dl = ws.dl;
+      svg.setAttribute("width", String(Math.round(w * k)));
+      svg.setAttribute("height", String(Math.round(h * k)));
       let text = "";
       try {
         const W = window;
@@ -2523,19 +2780,90 @@
       const s = { img, href, ready: false };
       img.onload = function() {
         s.ready = true;
-        if (ws.dl !== dl || want[r] !== sig) return;
-        cur[r] = s;
-        refresh();
+        if (ws.dl !== dl) return;
+        done(s);
+      };
+      img.onerror = function() {
+        s.failed = true;
+        if (ws.dl !== dl) return;
+        done(s);
       };
       img.src = href;
       return s;
     }
+    function rasterRun(r, drop, done) {
+      const dl = ws.dl, root = docFor(r);
+      if (!root) return null;
+      const svg = root.cloneNode(true);
+      const nodes = Array.prototype.slice.call(svg.querySelectorAll("[data-key]"));
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const k = keyIdx.get(n.getAttribute("data-key") || "");
+        if (k == null) continue;
+        if (drop && drop[k] || !styleNode(n, k)) {
+          if (n.parentNode) n.parentNode.removeChild(n);
+        }
+      }
+      return rasterise(svg, dl.runW, dl.runH, pngScale(r), done);
+    }
+    function closure(g, seed, among) {
+      const inn = [];
+      const out = [];
+      for (let q = 0; q < seed.length; q++) if (!inn[seed[q]]) {
+        inn[seed[q]] = true;
+        out.push(seed[q]);
+      }
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (let j = 0; j < g.k.length; j++) {
+          if (inn[j] || !among(j)) continue;
+          for (let q = 0; q < out.length; q++) {
+            const i = out[q];
+            if (g.x0[j] < g.x1[i] && g.x1[j] > g.x0[i] && g.y0[j] < g.y1[i] && g.y1[j] > g.y0[i]) {
+              inn[j] = true;
+              out.push(j);
+              grew = true;
+              break;
+            }
+          }
+        }
+      }
+      return out;
+    }
+    function makePatch(r, sig) {
+      const g = geoOf(r);
+      const flags = ws.msFlags, color = ws.msColor;
+      const touched = [];
+      for (let j = 0; j < g.k.length; j++) if (flags[g.k[j]] || color[g.k[j]]) touched.push(j);
+      if (!touched.length) return { parts: [], patch: null };
+      const region = closure(g, touched, () => true);
+      const cut = [];
+      let draw = false;
+      for (let q = 0; q < region.length; q++) {
+        const j = region[q];
+        cut.push(g.x0[j], g.y0[j], g.x1[j], g.y1[j]);
+        if (!(flags[g.k[j]] & MS_HIDDEN)) draw = true;
+      }
+      const patch = { cut, fill: null };
+      if (!draw) return { parts: [], patch };
+      const f = rasterRun(r, null, function(s) {
+        if (s.failed || want[r] !== sig) return;
+        cur[r] = patch;
+        refresh();
+      });
+      if (!f) return { parts: [], patch: null };
+      patch.fill = { img: f.img, href: f.href };
+      return { parts: [f], patch };
+    }
+    let rebuilding = false;
     function refresh() {
       if (ws.markTier === "detail") {
-        const ims = ws.svgEl ? ws.svgEl.querySelectorAll("defs.vellumwidget-detail image[data-run]") : [];
-        for (let i = 0; i < ims.length; i++) {
-          const r = Number(ims[i].getAttribute("data-run"));
-          ims[i].setAttribute("href", runHref(r));
+        if (rebuilding) return;
+        rebuilding = true;
+        try {
+          ws.fx.evalTier();
+        } finally {
+          rebuilding = false;
         }
       } else if (ws.fx.ringMode()) {
         ws.fx.drawPoints(true);
@@ -2544,9 +2872,10 @@
     function restyleRuns() {
       if (!sync()) return false;
       const dl = ws.dl;
-      let changed = false;
+      let changed = false, sigChanged = false;
       for (let r = 0; r < dl.nRuns; r++) {
         const sig = sigOf(r);
+        if (want[r] !== sig) sigChanged = true;
         want[r] = sig;
         if (!sig) {
           if (cur[r]) {
@@ -2558,34 +2887,301 @@
         const list = cache[r] || (cache[r] = []);
         let hit = null;
         for (let q = 0; q < list.length; q++) if (list[q].sig === sig) {
-          hit = list[q].s;
+          hit = list[q];
           break;
         }
         if (!hit) {
-          hit = render(r, sig);
-          if (!hit) continue;
-          list.push({ sig, s: hit });
+          const m = makePatch(r, sig);
+          hit = { sig, parts: m.parts, patch: m.patch };
+          list.push(hit);
           if (list.length > CACHE_PER_RUN) list.shift();
         }
-        if (hit.ready && cur[r] !== hit) {
-          cur[r] = hit;
+        if (hit.parts.every((p) => !p || p.ready) && cur[r] !== hit.patch) {
+          cur[r] = hit.patch;
           changed = true;
         }
       }
-      if (changed && ws.markTier === "detail") refresh();
+      if ((changed || sigChanged && splitInDetail) && ws.markTier === "detail") refresh();
       return changed;
     }
-    function runImage(r) {
-      const dl = ws.dl;
-      if (!dl || !dl.runImgs) return null;
-      const s = forDl === dl ? cur[r - 1] : null;
-      return s ? s.img : dl.runImgs[r - 1] || null;
+    let splitInDetail = false;
+    function anchorOf(n) {
+      const t = n.tagName.toLowerCase() === "text" ? n : n.querySelector("text");
+      if (!t) return null;
+      const x = parseFloat(t.getAttribute("x") || "") || 0, y = parseFloat(t.getAttribute("y") || "") || 0;
+      const tr = (t.getAttribute("transform") || "").trim();
+      if (!tr) return { x, y };
+      const m = parseTransformList(tr);
+      if (!m) return null;
+      const A = applyAffine6(m, x, y);
+      return isFinite(A.x) && isFinite(A.y) ? A : null;
     }
-    function runHref(r) {
+    function geoOf(r) {
+      if (geos[r]) return geos[r];
       const dl = ws.dl;
-      if (!dl || !dl.runHref) return "";
-      const s = forDl === dl ? cur[r - 1] : null;
-      return s ? s.href : dl.runHref[r - 1] || "";
+      const at = {};
+      const g = { k: [], p: [], x0: [], y0: [], x1: [], y1: [], cst: [], ax: [], ay: [], iso: [], nCst: 0 };
+      for (let i = 0; i < dl.n; i++) {
+        if (dl.run[i] !== r + 1) continue;
+        const k = dl.key[i];
+        let j = at[k];
+        if (j === void 0) {
+          j = at[k] = g.k.length;
+          g.k.push(k);
+          g.p.push(dl.panel[i] <= dl.panels.length ? dl.panel[i] : 0);
+          g.x0.push(dl.bx0[i]);
+          g.y0.push(dl.by0[i]);
+          g.x1.push(dl.bx1[i]);
+          g.y1.push(dl.by1[i]);
+        } else {
+          g.x0[j] = Math.min(g.x0[j], dl.bx0[i]);
+          g.y0[j] = Math.min(g.y0[j], dl.by0[i]);
+          g.x1[j] = Math.max(g.x1[j], dl.bx1[i]);
+          g.y1[j] = Math.max(g.y1[j], dl.by1[i]);
+        }
+      }
+      const root = ws.runSvg ? docFor(r) : null;
+      const nodeOf = {};
+      if (root) {
+        const nodes = root.querySelectorAll("[data-key]");
+        for (let i = 0; i < nodes.length; i++) {
+          const kk = nodes[i].getAttribute("data-key") || "";
+          if (!nodeOf[kk]) nodeOf[kk] = nodes[i];
+        }
+      }
+      for (let j = 0; j < g.k.length; j++) {
+        g.x0[j] -= RUN_BOX_PAD;
+        g.y0[j] -= RUN_BOX_PAD;
+        g.x1[j] += RUN_BOX_PAD;
+        g.y1[j] += RUN_BOX_PAD;
+        const key = dl.keys[g.k[j]];
+        const e = ws.meta[key];
+        const mark = e && e.mark ? e.mark : "";
+        const text = mark === "text";
+        const c = (text || GLYPH_MARKS[mark] === true) && g.p[j] > 0 && isFinite(g.x0[j]) && g.x1[j] > g.x0[j] && g.y1[j] > g.y0[j];
+        g.cst.push(c);
+        let ax = (g.x0[j] + g.x1[j]) / 2, ay = (g.y0[j] + g.y1[j]) / 2;
+        if (c && text && nodeOf[key]) {
+          const a = anchorOf(nodeOf[key]);
+          if (a) {
+            ax = a.x;
+            ay = a.y;
+          }
+        }
+        g.ax.push(ax);
+        g.ay.push(ay);
+        if (c) g.nCst++;
+      }
+      const ord = g.k.map((_, j) => j).sort((a, b) => g.x0[a] - g.x0[b]);
+      const iso = g.k.map(() => true);
+      for (let a = 0; a < ord.length; a++) {
+        const i = ord[a];
+        for (let b = a + 1; b < ord.length; b++) {
+          const j = ord[b];
+          if (g.x0[j] >= g.x1[i]) break;
+          if (g.y0[j] < g.y1[i] && g.y1[j] > g.y0[i]) {
+            iso[i] = false;
+            iso[j] = false;
+          }
+        }
+      }
+      g.iso = iso;
+      geos[r] = g;
+      return g;
+    }
+    function atlasOf(r, g, js, done) {
+      const dl = ws.dl, root = docFor(r);
+      if (!root) return null;
+      const want_ = {};
+      for (let q = 0; q < js.length; q++) want_[dl.keys[g.k[js[q]]]] = q;
+      let wmax = 0;
+      for (let q = 0; q < js.length; q++) wmax = Math.max(wmax, g.x1[js[q]] - g.x0[js[q]]);
+      const W = Math.max(512, Math.ceil(wmax) + 2 * ATLAS_GAP);
+      const cx = [], cy = [];
+      let x = ATLAS_GAP, y = ATLAS_GAP, rowH = 0;
+      for (let q = 0; q < js.length; q++) {
+        const j = js[q], w = g.x1[j] - g.x0[j], h = g.y1[j] - g.y0[j];
+        if (x + w + ATLAS_GAP > W) {
+          x = ATLAS_GAP;
+          y += rowH + ATLAS_GAP;
+          rowH = 0;
+        }
+        cx.push(x);
+        cy.push(y);
+        x += Math.ceil(w) + ATLAS_GAP;
+        rowH = Math.max(rowH, Math.ceil(h));
+      }
+      const H = y + rowH + ATLAS_GAP;
+      const NS = "http://www.w3.org/2000/svg";
+      const doc = root.ownerDocument;
+      const svg = doc.createElementNS(NS, "svg");
+      svg.setAttribute("xmlns", NS);
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+      const defs = root.querySelectorAll("defs");
+      for (let i = 0; i < defs.length; i++) svg.appendChild(defs[i].cloneNode(true));
+      const nodes = root.querySelectorAll("[data-key]");
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const q = want_[n.getAttribute("data-key") || ""];
+        if (q === void 0) continue;
+        const j = js[q];
+        const copy = n.cloneNode(true);
+        if (!styleNode(copy, g.k[j])) continue;
+        let top = copy;
+        for (let up = n.parentNode; up && up !== root; up = up.parentNode) {
+          if (up.nodeType !== 1 || up.tagName.toLowerCase() === "defs") break;
+          const sh = up.cloneNode(false);
+          sh.appendChild(top);
+          top = sh;
+        }
+        const cell = doc.createElementNS(NS, "g");
+        cell.setAttribute("transform", "translate(" + (cx[q] - g.x0[j]) + " " + (cy[q] - g.y0[j]) + ")");
+        cell.appendChild(top);
+        svg.appendChild(cell);
+      }
+      const ks = Math.max(2, pngScale(r));
+      const s = rasterise(svg, W, H, ks, done);
+      return s ? { s, w: W, h: H, cx, cy, ks } : null;
+    }
+    let pngCopies = [];
+    function pngCanvas(r) {
+      const dl = ws.dl, img = dl.runImgs[r];
+      if (pngCopies[r]) return pngCopies[r];
+      const im = img;
+      const w = im.naturalWidth || 0, h = im.naturalHeight || 0;
+      const c = w > 0 && h > 0 ? document.createElement("canvas") : null;
+      const x = c && typeof c.getContext === "function" ? c.getContext("2d") : null;
+      if (!c || !x) return img;
+      c.width = w;
+      c.height = h;
+      x.drawImage(im, 0, 0);
+      pngCopies[r] = c;
+      return c;
+    }
+    function runSplit(r1) {
+      sync();
+      const dl = ws.dl;
+      if (!dl || !dl.runImgs || !dl.runHref) return null;
+      if (geoDl !== dl) {
+        geoDl = dl;
+        geos = [];
+        splits = [];
+        svgBroken = [];
+        pngCopies = [];
+      }
+      const r = r1 - 1;
+      if (r < 0 || r >= dl.nRuns) return null;
+      const g = geoOf(r);
+      if (!g.nCst) return null;
+      const sig = forDl === dl ? sigOf(r) : "";
+      const hit = splits[r];
+      if (hit && hit.parts.some((s) => !!s && !!s.failed)) {
+        svgBroken[r] = true;
+        splits[r] = void 0;
+      } else if (hit && hit.sig === sig) return hit.parts.every((s) => !s || s.ready) ? hit.split : null;
+      const flags = ws.msActive ? ws.msFlags : null, color = ws.msActive ? ws.msColor : null;
+      const hasSvg = forDl === dl && !svgBroken[r] && !!docFor(r);
+      const png = pngCanvas(r), pngHref = dl.runHref[r] || "";
+      const marks = [], atl = [], atlAt = [];
+      const cut = [];
+      const isCst = {};
+      let restAny = false;
+      for (let j = 0; j < g.k.length; j++) {
+        const k = g.k[j], f = flags ? flags[k] : 0, c = color ? color[k] : 0;
+        if (!g.cst[j]) {
+          restAny = true;
+          continue;
+        }
+        isCst[k] = true;
+        cut.push(g.x0[j], g.y0[j], g.x1[j], g.y1[j]);
+        const m = {
+          k,
+          p: g.p[j],
+          x0: g.x0[j],
+          y0: g.y0[j],
+          x1: g.x1[j],
+          y1: g.y1[j],
+          ax: g.ax[j],
+          ay: g.ay[j],
+          src: png,
+          href: pngHref,
+          atlas: false,
+          fw: dl.runW,
+          fh: dl.runH,
+          sx: g.x0[j],
+          sy: g.y0[j],
+          ks: pngScale(r)
+        };
+        if (f & MS_HIDDEN) m.src = null;
+        else if (hasSvg && (!g.iso[j] || f || c) && atl.length < ATLAS_MAX) {
+          atlAt.push(marks.length);
+          atl.push(j);
+        }
+        marks.push(m);
+      }
+      const parts = [];
+      const split = { marks, rest: null };
+      const entry = { sig, parts, split };
+      splits[r] = entry;
+      const redraw = function() {
+        if (ws.dl === dl && splits[r] === entry) refresh();
+      };
+      if (atl.length) {
+        const a = atlasOf(r, g, atl, redraw);
+        if (a) {
+          parts.push(a.s);
+          for (let q = 0; q < atl.length; q++) {
+            const m = marks[atlAt[q]];
+            m.src = a.s.img;
+            m.href = a.s.href;
+            m.atlas = true;
+            m.fw = a.w;
+            m.fh = a.h;
+            m.sx = a.cx[q];
+            m.sy = a.cy[q];
+            m.ks = a.ks;
+          }
+        }
+      }
+      let rest = null;
+      if (restAny) {
+        rest = { cut: cut.slice(), fill: null };
+        if (hasSvg) {
+          const meets = function(j) {
+            for (let q = 0; q < cut.length; q += 4) {
+              if (g.x0[j] < cut[q + 2] && g.x1[j] > cut[q] && g.y0[j] < cut[q + 3] && g.y1[j] > cut[q + 1]) return true;
+            }
+            return false;
+          };
+          const seed = [];
+          for (let j = 0; j < g.k.length; j++) {
+            if (g.cst[j]) continue;
+            const k = g.k[j];
+            if (flags && flags[k] || color && color[k] || meets(j)) seed.push(j);
+          }
+          const region = closure(g, seed, (j) => !g.cst[j]);
+          let draw = false;
+          for (let q = 0; q < region.length; q++) {
+            const j = region[q];
+            rest.cut.push(g.x0[j], g.y0[j], g.x1[j], g.y1[j]);
+            if (!(flags && flags[g.k[j]] & MS_HIDDEN)) draw = true;
+          }
+          if (draw) {
+            const f = rasterRun(r, isCst, redraw);
+            if (f) {
+              parts.push(f);
+              rest.fill = { img: f.img, href: f.href };
+            }
+          }
+        }
+      }
+      split.rest = rest;
+      return parts.every((s) => !s || s.ready) ? split : null;
+    }
+    function runPatch(r) {
+      const dl = ws.dl;
+      if (!dl || !dl.runImgs || forDl !== dl) return null;
+      return cur[r - 1] || null;
     }
     function runStyled() {
       const dl = ws.dl;
@@ -2594,7 +3190,33 @@
       for (let r = 0; r < dl.nRuns; r++) out.push(forDl === dl && !!cur[r]);
       return out;
     }
-    return { restyleRuns, runImage, runHref, runStyled };
+    function markSplitInDetail(on) {
+      splitInDetail = on;
+    }
+    let keyRun = null;
+    let keyRunDl = null;
+    function constAnchor(key) {
+      if (!sync()) return null;
+      const dl = ws.dl;
+      const id = keyIdx.get(key);
+      if (id == null) return null;
+      if (!keyRun || keyRunDl !== dl) {
+        keyRun = /* @__PURE__ */ new Map();
+        keyRunDl = dl;
+        for (let r2 = 0; r2 < runKeys.length; r2++) {
+          const ids = runKeys[r2];
+          for (let q = 0; q < ids.length; q++) if (!keyRun.has(ids[q])) keyRun.set(ids[q], r2);
+        }
+      }
+      const r = keyRun.get(id);
+      if (r == null) return null;
+      const g = geoOf(r);
+      for (let j = 0; j < g.k.length; j++) {
+        if (g.k[j] === id) return g.cst[j] ? { x: g.ax[j], y: g.ay[j] } : null;
+      }
+      return null;
+    }
+    return { restyleRuns, runPatch, runStyled, runSplit, markSplitInDetail, constAnchor };
   }
   function runSvgsOf(svg, n) {
     if (svg == null) return null;
@@ -2915,31 +3537,157 @@
         D.el.appendChild(cp);
         return id;
       };
+      const cstPanel = function(p) {
+        if (!panHost[p] || !ws.axisZoomActive || ws.opts.zoomMarks === "scale") return false;
+        return ws.azPanels.some((a) => a.p.name === dl.panels[p - 1]);
+      };
+      const constAt = {};
+      const counter = function(el, ax, ay) {
+        const st = el.style;
+        st.setProperty("transform-box", "view-box");
+        st.setProperty("transform-origin", "0px 0px");
+        st.setProperty("transform", "translate(" + ax + "px," + ay + "px) scale(var(--vw-ix,1),var(--vw-iy,1)) translate(" + -ax + "px," + -ay + "px)");
+      };
+      const imgDef = function(id, href, w, h) {
+        if (!D.el.querySelector("#" + id)) {
+          const im = document.createElementNS(SVGNS, "image");
+          im.setAttribute("id", id);
+          im.setAttribute("x", "0");
+          im.setAttribute("y", "0");
+          im.setAttribute("width", String(w));
+          im.setAttribute("height", String(h));
+          im.setAttribute("preserveAspectRatio", "none");
+          im.setAttribute("href", href);
+          D.el.appendChild(im);
+        }
+        return id;
+      };
+      const rectsInto = function(el, cut, fill) {
+        for (let q = 0; q < cut.length; q += 4) {
+          const rc = document.createElementNS(SVGNS, "rect");
+          rc.setAttribute("x", String(cut[q]));
+          rc.setAttribute("y", String(cut[q + 1]));
+          rc.setAttribute("width", String(cut[q + 2] - cut[q]));
+          rc.setAttribute("height", String(cut[q + 3] - cut[q + 1]));
+          if (fill) rc.setAttribute("fill", fill);
+          el.appendChild(rc);
+        }
+      };
+      const patchInto = function(g, r, R, tag) {
+        const u = document.createElementNS(SVGNS, "use");
+        u.setAttribute("href", "#" + imgDef(D.pre + "runpng" + r, dl.runHref[r - 1], dl.runW, dl.runH));
+        if (R.cut.length) {
+          const mid = D.pre + "runcut" + tag + r;
+          if (!D.el.querySelector("#" + mid)) {
+            const mk = document.createElementNS(SVGNS, "mask");
+            mk.setAttribute("id", mid);
+            mk.setAttribute("maskUnits", "userSpaceOnUse");
+            mk.setAttribute("x", "0");
+            mk.setAttribute("y", "0");
+            mk.setAttribute("width", String(dl.runW));
+            mk.setAttribute("height", String(dl.runH));
+            rectsInto(mk, [0, 0, dl.runW, dl.runH], "#fff");
+            rectsInto(mk, R.cut, "#000");
+            D.el.appendChild(mk);
+          }
+          u.setAttribute("mask", "url(#" + mid + ")");
+        }
+        g.appendChild(u);
+        if (R.fill) {
+          const f = document.createElementNS(SVGNS, "use");
+          f.setAttribute("href", "#" + imgDef(D.pre + "runfill" + tag + r, R.fill.href, dl.runW, dl.runH));
+          const cid = D.pre + "runin" + tag + r;
+          if (!D.el.querySelector("#" + cid)) {
+            const c = document.createElementNS(SVGNS, "clipPath");
+            c.setAttribute("id", cid);
+            c.setAttribute("clipPathUnits", "userSpaceOnUse");
+            rectsInto(c, R.cut);
+            D.el.appendChild(c);
+          }
+          f.setAttribute("clip-path", "url(#" + cid + ")");
+          g.appendChild(f);
+        }
+      };
+      let usedSplit = false;
+      const placeSplit = function(p, r, sp) {
+        const g = document.createElementNS(SVGNS, "g");
+        g.setAttribute("class", "vellumwidget-detail-run vellumwidget-detail-split");
+        g.setAttribute("data-run", String(r));
+        const mode = dl.runBlend ? dl.runBlend[r - 1] : "normal";
+        if (mode && mode !== "normal") g.style.setProperty("mix-blend-mode", mode);
+        const cp = ws.fx.panelClip(dl.panels[p - 1]);
+        if (cp) g.setAttribute("clip-path", cp);
+        if (sp.rest) patchInto(g, r, sp.rest, "s");
+        for (let q = 0; q < sp.marks.length; q++) {
+          const m = sp.marks[q];
+          if (m.p !== p) continue;
+          constAt[m.k] = { ax: m.ax, ay: m.ay };
+          if (!m.src) continue;
+          const id = m.atlas ? imgDef(D.pre + "atlas" + r, m.href, m.fw, m.fh) : imgDef(D.pre + "runpng" + r, m.href, m.fw, m.fh);
+          const w = m.x1 - m.x0, h = m.y1 - m.y0;
+          const box = document.createElementNS(SVGNS, "svg");
+          box.setAttribute("x", String(m.x0));
+          box.setAttribute("y", String(m.y0));
+          box.setAttribute("width", String(w));
+          box.setAttribute("height", String(h));
+          box.setAttribute("viewBox", m.sx + " " + m.sy + " " + w + " " + h);
+          box.setAttribute("preserveAspectRatio", "none");
+          const u = document.createElementNS(SVGNS, "use");
+          u.setAttribute("href", "#" + id);
+          box.appendChild(u);
+          const cg = document.createElementNS(SVGNS, "g");
+          cg.setAttribute("class", "vellumwidget-detail-const");
+          counter(cg, m.ax, m.ay);
+          cg.appendChild(box);
+          g.appendChild(cg);
+        }
+        groupFor(p).appendChild(g);
+        if (chains[p]) chains[p].length = 0;
+      };
       const placeRun = function(p, r) {
         const tag = (panHost[p] ? p : "root") + ":" + r;
         if (placed[tag] || !D || !dl.runHref) return;
         placed[tag] = true;
-        if (!runIds[r]) {
-          const im = document.createElementNS(SVGNS, "image");
-          runIds[r] = D.pre + "run" + r;
-          im.setAttribute("id", runIds[r]);
-          im.setAttribute("x", "0");
-          im.setAttribute("y", "0");
-          im.setAttribute("width", String(dl.runW));
-          im.setAttribute("height", String(dl.runH));
-          im.setAttribute("preserveAspectRatio", "none");
-          im.setAttribute("data-run", String(r));
-          im.setAttribute("href", ws.fx.runHref(r));
-          D.el.appendChild(im);
+        const cp0 = cstPanel(p);
+        if (cp0) usedSplit = true;
+        const sp = cp0 ? ws.fx.runSplit(r) : null;
+        if (sp) {
+          placeSplit(p, r, sp);
+          return;
         }
-        const u = document.createElementNS(SVGNS, "use");
-        u.setAttribute("class", "vellumwidget-detail-run");
-        u.setAttribute("href", "#" + runIds[r]);
+        const patch = ws.fx.runPatch(r);
+        let u;
+        if (patch) {
+          u = document.createElementNS(SVGNS, "g");
+          u.setAttribute("class", "vellumwidget-detail-run vellumwidget-detail-patch");
+          u.setAttribute("data-run", String(r));
+          patchInto(u, r, patch, "p");
+        } else {
+          if (!runIds[r]) {
+            const im = document.createElementNS(SVGNS, "image");
+            runIds[r] = D.pre + "run" + r;
+            im.setAttribute("id", runIds[r]);
+            im.setAttribute("x", "0");
+            im.setAttribute("y", "0");
+            im.setAttribute("width", String(dl.runW));
+            im.setAttribute("height", String(dl.runH));
+            im.setAttribute("preserveAspectRatio", "none");
+            im.setAttribute("data-run", String(r));
+            im.setAttribute("href", dl.runHref[r - 1] || "");
+            D.el.appendChild(im);
+          }
+          u = document.createElementNS(SVGNS, "use");
+          u.setAttribute("class", "vellumwidget-detail-run");
+          u.setAttribute("href", "#" + runIds[r]);
+        }
         const mode = dl.runBlend ? dl.runBlend[r - 1] : "normal";
         if (mode && mode !== "normal") u.style.setProperty("mix-blend-mode", mode);
         if (!panHost[p]) {
           const cid = rootClip(r);
           if (cid) u.setAttribute("clip-path", "url(#" + cid + ")");
+        } else {
+          const cp = ws.fx.panelClip(dl.panels[p - 1]);
+          if (cp) u.setAttribute("clip-path", cp);
         }
         groupFor(p).appendChild(u);
         if (chains[p]) chains[p].length = 0;
@@ -2978,6 +3726,8 @@
           n2.removeAttribute("stroke-opacity");
           n2.removeAttribute("stroke-dasharray");
           n2.setAttribute("class", "vellumwidget-detail-proxy");
+          const ca = constAt[dl.key[i]];
+          if (ca) counter(n2, ca.ax, ca.ay);
           groupFor(p).appendChild(n2);
           const k2 = dl.keys[dl.key[i]];
           (ws.nodesByKey[k2] = ws.nodesByKey[k2] || []).push(n2);
@@ -2997,6 +3747,7 @@
           ws.detailKeys.push(k);
         }
       }
+      ws.fx.markSplitInDetail(usedSplit);
       const was = ws.markTier;
       ws.markTier = "detail";
       ws.calib = null;
@@ -3017,6 +3768,7 @@
     function leaveDetail() {
       if (ws.markTier !== "detail") return;
       dropNodes();
+      ws.fx.markSplitInDetail(false);
       ws.markTier = "mid";
       ws.calib = null;
       ws.hoverSig = "";
@@ -3056,12 +3808,18 @@
     if (!isFinite(na) || !isFinite(nb) || na === nb) return null;
     return [Math.min(na, nb), Math.max(na, nb)];
   }
-  function boundPan(p, t, b) {
+  function boundPan(p, t, b, maxZoom) {
     const out = { sx: t.sx, sy: t.sy, tx: t.tx, ty: t.ty };
+    const cap = typeof maxZoom === "number" && isFinite(maxZoom) && maxZoom >= 1 ? maxZoom : 0;
+    const capped = (d0, d1, span) => {
+      if (!cap || Math.abs(d1 - d0) * cap >= Math.abs(span)) return [d0, d1];
+      const mid = (d0 + d1) / 2, half = Math.abs(span) / cap / 2 * (d1 >= d0 ? 1 : -1);
+      return [mid - half, mid + half];
+    };
     if (b.h && p.x && p.px1 !== p.px0 && p.x.native_hi !== p.x.native_lo) {
       const ax = p.x;
       const rising = ax.native_hi > ax.native_lo;
-      const d0 = rising ? b.h[0] : b.h[1], d1 = rising ? b.h[1] : b.h[0];
+      const [d0, d1] = capped(rising ? b.h[0] : b.h[1], rising ? b.h[1] : b.h[0], ax.native_hi - ax.native_lo);
       const k = (p.px1 - p.px0) / (ax.native_hi - ax.native_lo);
       const k2 = (p.px1 - p.px0) / (d1 - d0);
       out.sx = k2 / k;
@@ -3070,7 +3828,7 @@
     if (b.v && p.y && p.py1 !== p.py0 && p.y.native_hi !== p.y.native_lo) {
       const ay = p.y;
       const rising = ay.native_hi > ay.native_lo;
-      const d0 = rising ? b.v[0] : b.v[1], d1 = rising ? b.v[1] : b.v[0];
+      const [d0, d1] = capped(rising ? b.v[0] : b.v[1], rising ? b.v[1] : b.v[0], ay.native_hi - ay.native_lo);
       const k = (p.py1 - p.py0) / (ay.native_hi - ay.native_lo);
       const k2 = (p.py1 - p.py0) / (d1 - d0);
       out.sy = k2 / k;
@@ -3157,7 +3915,7 @@
     }
     function boundT(a, t) {
       const b = ws.scaleBinds[a.p.name];
-      return b ? boundPan(a.p, t, b) : t;
+      return b ? boundPan(a.p, t, b, ws.opts.maxZoom) : t;
     }
     function applyScaleBinds() {
       const ix = ws.interactions;
@@ -3392,101 +4150,6 @@
       });
     }
     return { setColorRange, buildColorbar };
-  }
-
-  // srcts/geometry.ts
-  function rectsIntersect(a, b) {
-    return a.x0 <= b.x1 && a.x1 >= b.x0 && a.y0 <= b.y1 && a.y1 >= b.y0;
-  }
-  function distToBbox(x, y, b) {
-    const dx = Math.max(b.x0 - x, 0, x - b.x1);
-    const dy = Math.max(b.y0 - y, 0, y - b.y1);
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-  function hasBbox(e) {
-    return typeof e.x0 === "number" && typeof e.y0 === "number";
-  }
-  function isRoundMark(mark) {
-    return mark === "point" || mark === "points" || mark === "circle" || mark === "circles";
-  }
-  function distToSegment2(x, y, ax, ay, bx, by) {
-    const vx = bx - ax, vy = by - ay;
-    const len2 = vx * vx + vy * vy;
-    let t = len2 > 0 ? ((x - ax) * vx + (y - ay) * vy) / len2 : 0;
-    t = t < 0 ? 0 : t > 1 ? 1 : t;
-    const dx = x - (ax + t * vx), dy = y - (ay + t * vy);
-    return dx * dx + dy * dy;
-  }
-  function distToGeom(x, y, g, gx, gy, box) {
-    const at = g.at, n = g.n;
-    if (n <= 0) return Infinity;
-    if (g.kind === "point") {
-      const dx = x - gx[at], dy = y - gy[at];
-      const d = Math.sqrt(dx * dx + dy * dy);
-      const r = box ? Math.min(box.x1 - box.x0, box.y1 - box.y0) / 2 : 0;
-      return d > r ? d - r : 0;
-    }
-    if (n === 1) {
-      const dx = x - gx[at], dy = y - gy[at];
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-    if (g.kind === "rect" || g.kind === "text" || g.kind === "roundrect") {
-      return distToBbox(x, y, {
-        x0: Math.min(gx[at], gx[at + 1]),
-        x1: Math.max(gx[at], gx[at + 1]),
-        y0: Math.min(gy[at], gy[at + 1]),
-        y1: Math.max(gy[at], gy[at + 1])
-      });
-    }
-    const closed = g.kind === "polygon" || g.kind === "path" || g.kind === "hexagon" || g.kind === "sector";
-    const rings = g.rings || [n];
-    let best = Infinity;
-    let cross = 0;
-    let wind = 0;
-    let ra = at;
-    for (let r = 0; r < rings.length; r++) {
-      const rn = rings[r] | 0;
-      if (rn <= 0) continue;
-      if (closed && rn >= 3) {
-        for (let i = 0, j = rn - 1; i < rn; j = i++) {
-          const xi = gx[ra + i], yi = gy[ra + i];
-          const xj = gx[ra + j], yj = gy[ra + j];
-          if (yi > y !== yj > y) {
-            if (x < (xj - xi) * (y - yi) / (yj - yi) + xi) cross++;
-            const side = (xi - xj) * (y - yj) - (x - xj) * (yi - yj);
-            if (yi > yj) {
-              if (side > 0) wind++;
-            } else if (side < 0) wind--;
-          }
-        }
-      }
-      for (let i = 1; i < rn; i++) {
-        const d2 = distToSegment2(x, y, gx[ra + i - 1], gy[ra + i - 1], gx[ra + i], gy[ra + i]);
-        if (d2 < best) best = d2;
-      }
-      if (closed && rn >= 3) {
-        const d2 = distToSegment2(x, y, gx[ra + rn - 1], gy[ra + rn - 1], gx[ra], gy[ra]);
-        if (d2 < best) best = d2;
-      }
-      ra += rn;
-    }
-    if (closed && (g.evenodd ? (cross & 1) === 1 : wind !== 0)) return 0;
-    return Math.sqrt(best);
-  }
-  function unionBbox(elems, keys) {
-    let out = null;
-    for (let i = 0; i < elems.length; i++) {
-      const e = elems[i];
-      if (!hasBbox(e) || !keys[e.key]) continue;
-      if (!out) out = { x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1 };
-      else {
-        out.x0 = Math.min(out.x0, e.x0);
-        out.y0 = Math.min(out.y0, e.y0);
-        out.x1 = Math.max(out.x1, e.x1);
-        out.y1 = Math.max(out.y1, e.y1);
-      }
-    }
-    return out;
   }
 
   // srcts/features/coords.ts
@@ -3789,7 +4452,7 @@
       (ws.interactions.selections || []).forEach((s) => selByName[s.name] = s);
       for (let ci = 0; ci < ws.interactions.conditions.length; ci++) {
         const c = ws.interactions.conditions[ci];
-        const tag = c.selection + ":" + c.aes;
+        const tag = c.tag || c.selection + ":" + c.aes;
         const tagged = ws.condTagElems[tag] || [];
         const sel = selByName[c.selection];
         const members = sel ? selectionMembers(sel) : {};
@@ -5107,9 +5770,64 @@
       }
       ws.haveGeometry = at > 0;
     }
+    function constBox(e) {
+      if (!ws.axisZoomActive || ws.opts.zoomMarks === "scale" || !hasBbox(e)) return null;
+      const text = e.mark === "text";
+      if (!text && !(e.mark && GLYPH_MARKS[e.mark] === true)) return null;
+      let ax = (e.x0 + e.x1) / 2, ay = (e.y0 + e.y1) / 2;
+      const a = ws.fx.azNearest(ax, ay);
+      if (!a) return null;
+      const p = a.p;
+      if (ax < p.px0 || ax > p.px1 || ay < p.py0 || ay > p.py1) return null;
+      const t = ws.fx.azT(a);
+      if (!(t.sx > 0) || !(t.sy > 0) || Math.abs(t.sx - 1) < 1e-9 && Math.abs(t.sy - 1) < 1e-9) return null;
+      if (ws.rasterMode && !ws.azPanels.some(function(q) {
+        const u = ws.fx.azT(q);
+        return u.sx > 1.0001 || u.sy > 1.0001;
+      })) return null;
+      if (text) {
+        const an = textAnchor(e.key);
+        if (an) {
+          ax = an.x;
+          ay = an.y;
+        }
+      }
+      return {
+        x0: ax + (e.x0 - ax) / t.sx,
+        x1: ax + (e.x1 - ax) / t.sx,
+        y0: ay + (e.y0 - ay) / t.sy,
+        y1: ay + (e.y1 - ay) / t.sy,
+        sx: t.sx,
+        sy: t.sy
+      };
+    }
+    function textAnchor(key) {
+      if (ws.rasterMode) {
+        const r = ws.fx.constAnchor(key);
+        if (r) return r;
+      }
+      const nodes = ws.nodesByKey[key];
+      const n = nodes && nodes.length ? nodes[0] : null;
+      const t = n ? n.tagName.toLowerCase() === "text" ? n : n.querySelector("text") : null;
+      if (!t) return null;
+      const x = parseFloat(t.getAttribute("x") || "") || 0, y = parseFloat(t.getAttribute("y") || "") || 0;
+      const tr = (t.getAttribute("transform") || "").trim();
+      if (!tr) return { x, y };
+      const m = parseTransformList(tr);
+      return m ? applyAffine6(m, x, y) : null;
+    }
+    function constGrows() {
+      if (!ws.axisZoomActive || ws.opts.zoomMarks === "scale") return false;
+      for (let i = 0; i < ws.azPanels.length; i++) {
+        const t = ws.fx.azT(ws.azPanels[i]);
+        if (t.sx < 1 - 1e-9 || t.sy < 1 - 1e-9) return true;
+      }
+      return false;
+    }
     function distToElem(x, y, e) {
-      const box = hasBbox(e) ? e : null;
-      const gs = ws.geomByKey[e.key];
+      const cb = constBox(e);
+      const box = cb || (hasBbox(e) ? e : null);
+      const gs = cb ? null : ws.geomByKey[e.key];
       if (!gs) {
         if (!box) return Infinity;
         if (isRoundMark(e.mark)) {
@@ -5173,7 +5891,7 @@
           best = e.key;
         }
       };
-      if (ws.spatialIndex) {
+      if (ws.spatialIndex && !constGrows()) {
         const ids = ws.spatialIndex.neighbors(x, y, PICK_CANDIDATES, maxDist);
         for (let i = 0; i < ids.length; i++) rank(ws.elements[ws.indexToElem[ids[i]]]);
       } else {
@@ -5220,7 +5938,7 @@
       };
       return dropPartialSeries(ws.elements, keys, inside);
     }
-    return { buildSpatialIndex, buildGeometry, distToElem, buildHoverAxis, nearestAxisKey, columnKeys, nearestKeyAt, brushKeysIn, lassoKeysIn, brushSelectable };
+    return { buildSpatialIndex, buildGeometry, distToElem, buildHoverAxis, nearestAxisKey, columnKeys, nearestKeyAt, brushKeysIn, lassoKeysIn, brushSelectable, constBox };
   }
 
   // srcts/features/pointer.ts
@@ -5323,9 +6041,12 @@
         const d = Math.hypot(pts[0].cx - pts[1].cx, pts[0].cy - pts[1].cy);
         if (d > 0) {
           const u = ws.fx.toAnchor((pts[0].cx + pts[1].cx) / 2, (pts[0].cy + pts[1].cy) / 2);
-          ws.vb = zoomViewBox(ws.vb, d / ws.pinchDist, u.x, u.y);
-          ws.fx.applyViewBox();
+          const next = zoomViewBoxCapped(ws.vb, ws.vb0, d / ws.pinchDist, u.x, u.y, ws.opts.maxZoom);
           ws.pinchDist = d;
+          if (next !== ws.vb) {
+            ws.vb = next;
+            ws.fx.applyViewBox();
+          }
         }
         return;
       }
@@ -5477,7 +6198,9 @@
       ws.fx.focusCellAt(ev.clientX, ev.clientY);
       const u = ws.fx.toAnchor(ev.clientX, ev.clientY);
       const factor = ev.deltaY < 0 ? 1.2 : 1 / 1.2;
-      ws.vb = zoomViewBox(ws.vb, factor, u.x, u.y);
+      const next = zoomViewBoxCapped(ws.vb, ws.vb0, factor, u.x, u.y, ws.opts.maxZoom);
+      if (next === ws.vb) return;
+      ws.vb = next;
       ws.fx.applyViewBox();
     }
     function onKey(ev) {
@@ -5541,12 +6264,18 @@
           ws.vb.y += dy;
           break;
         case "+":
-        case "=":
-          ws.vb = zoomViewBox(ws.vb, 1.2, cx, cy);
+        case "=": {
+          const next = zoomViewBoxCapped(ws.vb, ws.vb0, 1.2, cx, cy, ws.opts.maxZoom);
+          if (next === ws.vb) {
+            ev.preventDefault();
+            return;
+          }
+          ws.vb = next;
           break;
+        }
         case "-":
         case "_":
-          ws.vb = zoomViewBox(ws.vb, 1 / 1.2, cx, cy);
+          ws.vb = zoomViewBoxCapped(ws.vb, ws.vb0, 1 / 1.2, cx, cy, ws.opts.maxZoom);
           break;
         default:
           handled = false;
@@ -5871,7 +6600,7 @@
       const base = Math.min(W / vb0.w, H / vb0.h);
       const scaleMarks = ws.opts.zoomMarks === "scale";
       const np = dl.panels.length;
-      const aff = [], gs = [], pclip = [];
+      const aff = [], gs = [], pclip = [], cst = [];
       const ident = { ax: kx, bx: q0.px, ay: ky, by: q0.py };
       for (let p = 0; p <= np; p++) {
         let A = ident, g = az && !scaleMarks ? base : kx, c = null;
@@ -5885,8 +6614,14 @@
         aff.push(A);
         gs.push(g);
         pclip.push(c);
+        let k = false;
+        if (a && !scaleMarks) {
+          const t = ws.fx.azT(a);
+          k = Math.abs(t.sx - 1) > 1e-9 || Math.abs(t.sy - 1) > 1e-9;
+        }
+        cst.push(k);
       }
-      return { aff, gs, pclip, base: az ? base : kx };
+      return { aff, gs, pclip, base: az ? base : kx, cst, kx, ky };
     }
     function paintList(ctx0, dl, W, H, L, styled, sink) {
       const aff = L.aff, gs = L.gs, pclip = L.pclip, base = L.base, np = dl.panels.length;
@@ -5977,30 +6712,106 @@
           else (runLoose[r] = runLoose[r] || []).push(dl.bx0[i], dl.by0[i], dl.bx1[i], dl.by1[i]);
         }
       }
+      const ownClip = function(p) {
+        const pc = pclip[p], A = aff[p];
+        const nm = dl.panels[p - 1];
+        const pn = ws.panels.filter((q) => q.name === nm)[0];
+        if (!pc || !pn) return pc;
+        const x0 = Math.max(pc[0], Math.min(A.ax * pn.px0 + A.bx, A.ax * pn.px1 + A.bx));
+        const x1 = Math.min(pc[2], Math.max(A.ax * pn.px0 + A.bx, A.ax * pn.px1 + A.bx));
+        const y0 = Math.max(pc[1], Math.min(A.ay * pn.py0 + A.by, A.ay * pn.py1 + A.by));
+        const y1 = Math.min(pc[3], Math.max(A.ay * pn.py0 + A.by, A.ay * pn.py1 + A.by));
+        return x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null;
+      };
       let op = "";
-      const drawRun = function(r) {
-        const img = ws.fx.runImage(r);
-        if (!img) return;
-        const one = function(A, pc, boxes) {
+      const paintRun = function(r, A, clip, patch) {
+        const png = dl.runImgs[r - 1];
+        if (!png) return;
+        if (!patch || !patch.cut.length) {
           ctx.save();
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          if (pc) {
-            ctx.beginPath();
-            ctx.rect(pc[0], pc[1], pc[2] - pc[0], pc[3] - pc[1]);
-            ctx.clip();
-          }
-          if (boxes) {
-            ctx.beginPath();
-            for (let q = 0; q < boxes.length; q += 4) {
-              const x0 = A.ax * (boxes[q] - RUN_BOX_PAD) + A.bx, y0 = A.ay * (boxes[q + 1] - RUN_BOX_PAD) + A.by;
-              ctx.rect(x0, y0, A.ax * (boxes[q + 2] - boxes[q] + 2 * RUN_BOX_PAD), A.ay * (boxes[q + 3] - boxes[q + 1] + 2 * RUN_BOX_PAD));
-            }
-            ctx.clip();
-          }
+          clip(ctx);
           ctx.setTransform(A.ax, 0, 0, A.ay, A.bx, A.by);
-          if (op) ctx.globalCompositeOperation = op;
-          ctx.drawImage(img, 0, 0, dl.runW, dl.runH);
+          ctx.drawImage(png, 0, 0, dl.runW, dl.runH);
           ctx.restore();
+          return;
+        }
+        const cut = patch.cut;
+        const lc = layerPool.pop() || document.createElement("canvas");
+        if (lc.width !== W || lc.height !== H) {
+          lc.width = W;
+          lc.height = H;
+        }
+        const x = typeof lc.getContext === "function" ? lc.getContext("2d") : null;
+        if (x) {
+          x.setTransform(1, 0, 0, 1, 0, 0);
+          x.clearRect(0, 0, W, H);
+          x.setTransform(A.ax, 0, 0, A.ay, A.bx, A.by);
+          x.drawImage(png, 0, 0, dl.runW, dl.runH);
+          for (let q = 0; q < cut.length; q += 4) x.clearRect(cut[q], cut[q + 1], cut[q + 2] - cut[q], cut[q + 3] - cut[q + 1]);
+          ctx.save();
+          clip(ctx);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.drawImage(lc, 0, 0);
+          ctx.restore();
+        }
+        layerPool.push(lc);
+        if (patch.fill) {
+          ctx.save();
+          clip(ctx);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.beginPath();
+          for (let q = 0; q < cut.length; q += 4) {
+            ctx.rect(A.ax * cut[q] + A.bx, A.ay * cut[q + 1] + A.by, A.ax * (cut[q + 2] - cut[q]), A.ay * (cut[q + 3] - cut[q + 1]));
+          }
+          ctx.clip();
+          ctx.setTransform(A.ax, 0, 0, A.ay, A.bx, A.by);
+          ctx.drawImage(patch.fill.img, 0, 0, dl.runW, dl.runH);
+          ctx.restore();
+        }
+      };
+      const drawSplit = function(r, sp, p, c) {
+        const A = aff[p];
+        const clipTo = function(x) {
+          x.setTransform(1, 0, 0, 1, 0, 0);
+          x.beginPath();
+          x.rect(c[0], c[1], c[2] - c[0], c[3] - c[1]);
+          x.clip();
+          if (op) x.globalCompositeOperation = op;
+        };
+        if (sp.rest) paintRun(r, A, clipTo, sp.rest);
+        ctx.save();
+        clipTo(ctx);
+        const kx = L.kx, ky = L.ky;
+        for (let q = 0; q < sp.marks.length; q++) {
+          const m = sp.marks[q];
+          if (m.p !== p || !m.src) continue;
+          const dx = A.ax * m.ax + A.bx + kx * (m.x0 - m.ax), dy = A.ay * m.ay + A.by + ky * (m.y0 - m.ay);
+          const dw = kx * (m.x1 - m.x0), dh = ky * (m.y1 - m.y0);
+          if (dx > c[2] || dy > c[3] || dx + dw < c[0] || dy + dh < c[1]) continue;
+          ctx.drawImage(m.src, m.sx * m.ks, m.sy * m.ks, (m.x1 - m.x0) * m.ks, (m.y1 - m.y0) * m.ks, dx, dy, dw, dh);
+        }
+        ctx.restore();
+      };
+      const drawRun = function(r) {
+        const patch = ws.fx.runPatch(r);
+        const one = function(A, pc, boxes) {
+          paintRun(r, A, function(x) {
+            x.setTransform(1, 0, 0, 1, 0, 0);
+            if (pc) {
+              x.beginPath();
+              x.rect(pc[0], pc[1], pc[2] - pc[0], pc[3] - pc[1]);
+              x.clip();
+            }
+            if (boxes) {
+              x.beginPath();
+              for (let q = 0; q < boxes.length; q += 4) {
+                const x0 = A.ax * (boxes[q] - RUN_BOX_PAD) + A.bx, y0 = A.ay * (boxes[q + 1] - RUN_BOX_PAD) + A.by;
+                x.rect(x0, y0, A.ax * (boxes[q + 2] - boxes[q] + 2 * RUN_BOX_PAD), A.ay * (boxes[q + 3] - boxes[q + 1] + 2 * RUN_BOX_PAD));
+              }
+              x.clip();
+            }
+            if (op) x.globalCompositeOperation = op;
+          }, patch);
         };
         if (!anyPclip) {
           one(aff[0], null);
@@ -6008,7 +6819,14 @@
         }
         const hosted = runPanels[r];
         if (hosted) {
-          for (let p = 1; p <= np; p++) if (hosted[p]) one(aff[p], pclip[p]);
+          for (let p = 1; p <= np; p++) {
+            if (!hosted[p]) continue;
+            const c = ownClip(p);
+            if (!c) continue;
+            const sp = L.cst[p] ? ws.fx.runSplit(r) : null;
+            if (sp) drawSplit(r, sp, p, c);
+            else one(aff[p], c);
+          }
         }
         if (runLoose[r]) one(aff[0], null, runLoose[r]);
       };
@@ -6221,13 +7039,22 @@
     function ringFor(k, cls) {
       const m = ws.meta[k];
       if (!m || !hasBbox(m)) return null;
-      const cx = (m.x0 + m.x1) / 2;
-      const cy = (m.y0 + m.y1) / 2;
+      const cb = ws.fx.constBox(m);
+      const b = cb || m;
+      const cx = (b.x0 + b.x1) / 2;
+      const cy = (b.y0 + b.y1) / 2;
       const r = Math.max(m.x1 - m.x0, m.y1 - m.y0) / 2 + 2;
-      const c = document.createElementNS(SVGNS, "circle");
+      let c;
+      if (cb) {
+        c = document.createElementNS(SVGNS, "ellipse");
+        c.setAttribute("rx", String(r / cb.sx));
+        c.setAttribute("ry", String(r / cb.sy));
+      } else {
+        c = document.createElementNS(SVGNS, "circle");
+        c.setAttribute("r", String(r));
+      }
       c.setAttribute("cx", String(cx));
       c.setAttribute("cy", String(cy));
-      c.setAttribute("r", String(r));
       c.setAttribute("class", cls);
       c.setAttribute("vector-effect", "non-scaling-stroke");
       return c;
@@ -6401,7 +7228,48 @@
   // srcts/features/render.ts
   var marksSeq = 0;
   var aboveSeq = 0;
+  var clipSeq = 0;
   function renderFeature(ws) {
+    let clipSvg = null;
+    let clipMade = {};
+    function panelClip(name) {
+      if (!ws.svgEl) return null;
+      if (clipSvg !== ws.svgEl) {
+        clipSvg = ws.svgEl;
+        clipMade = {};
+      }
+      if (clipMade[name]) return clipMade[name];
+      const pan = ws.svgEl.querySelector('[data-vellum-pan="' + cssEscape(name) + '"]');
+      if (!pan) return null;
+      for (let up = pan.parentNode; up && up !== ws.svgEl; up = up.parentNode) {
+        if (!up.hasAttribute || !up.hasAttribute("data-vellum-panel")) continue;
+        const c = up.getAttribute("clip-path");
+        if (c) return c;
+        break;
+      }
+      const p = ws.panels.filter(function(q) {
+        return q.name === name;
+      })[0];
+      if (!p || !(p.px1 > p.px0) || !(p.py1 > p.py0)) return null;
+      let defs = ws.svgEl.querySelector("defs.vellumwidget-clip-defs");
+      if (!defs) {
+        defs = document.createElementNS(SVGNS, "defs");
+        defs.setAttribute("class", "vellumwidget-clip-defs");
+        ws.svgEl.insertBefore(defs, ws.svgEl.firstChild);
+      }
+      const id = "vw-own-" + ++clipSeq;
+      const cp = document.createElementNS(SVGNS, "clipPath");
+      cp.setAttribute("id", id);
+      cp.setAttribute("clipPathUnits", "userSpaceOnUse");
+      const rc = document.createElementNS(SVGNS, "rect");
+      rc.setAttribute("x", String(p.px0));
+      rc.setAttribute("y", String(p.py0));
+      rc.setAttribute("width", String(p.px1 - p.px0));
+      rc.setAttribute("height", String(p.py1 - p.py0));
+      cp.appendChild(rc);
+      defs.appendChild(cp);
+      return clipMade[name] = "url(#" + id + ")";
+    }
     function placeAbove(src) {
       if (!ws.stage) return null;
       const pre = "vw-above" + ++aboveSeq + "-";
@@ -6463,6 +7331,8 @@
         const u = document.createElementNS(SVGNS, "use");
         u.setAttribute("class", "vellumwidget-marks");
         u.setAttribute("href", "#" + id);
+        const cp = panelClip(names[i]);
+        if (cp) u.setAttribute("clip-path", cp);
         pans[i].appendChild(u);
       }
       return "pans";
@@ -6554,7 +7424,7 @@
         // Interactive-by-default: hover/select/brush/lasso/zoom and axis-aware
         // zoom are on unless the payload overrides them. (as_widget() no longer
         // exposes these as flags; the defaults live here.)
-        { tooltip: true, hover: true, select: true, brush: true, lasso: true, zoom: true, toolbar: true, nearest: true, a11y: true, selectMode: "multiple", hoverMode: "closest", crosshair: false, navigator: false, axisZoom: true, zoomMarks: "fixed" },
+        { tooltip: true, hover: true, select: true, brush: true, lasso: true, zoom: true, toolbar: true, nearest: true, a11y: true, selectMode: "multiple", hoverMode: "closest", crosshair: false, navigator: false, axisZoom: true, zoomMarks: "fixed", maxZoom: DEFAULT_MAX_ZOOM },
         x.options || {}
       );
       ws.elements = normalizeElements(x.elements);
@@ -6721,7 +7591,7 @@
       ws.calib = null;
       ws.fx.drawPoints();
     }
-    return { renderValue, resize };
+    return { renderValue, resize, panelClip };
   }
 
   // srcts/linking.ts
@@ -7288,13 +8158,14 @@
     }
     function applyLinkedView(v) {
       if (!ws.vb0) return;
-      const next = {
+      let next = {
         x: ws.vb0.x + v.x * ws.vb0.w,
         y: ws.vb0.y + v.y * ws.vb0.h,
         w: v.w * ws.vb0.w,
         h: v.h * ws.vb0.h
       };
       if (!(next.w > 0) || !(next.h > 0)) return;
+      next = clampViewBox(next, ws.vb0, ws.opts.maxZoom);
       if (ws.vb && Math.abs(next.x - ws.vb.x) < 1e-6 && Math.abs(next.y - ws.vb.y) < 1e-6 && Math.abs(next.w - ws.vb.w) < 1e-6 && Math.abs(next.h - ws.vb.h) < 1e-6) return;
       ws.receivingView = true;
       ws.vb = next;
@@ -7316,6 +8187,8 @@
         ws.vb.y = ws.vb0.y;
         ws.vb.h = ws.vb0.h;
       }
+      if (ws.vb) ws.vb = clampViewBox(ws.vb, ws.vb0, ws.opts.maxZoom);
+      if (ws.vb) ws.el.classList.toggle("vellumwidget-zoom-max", atMaxZoom(ws.vb, ws.vb0, ws.opts.maxZoom));
       if (ws.axisZoomActive && ws.panGroup && ws.vb && ws.vb0) {
         ws.fx.applyPanTransforms();
         if (ws.svgEl) ws.svgEl.setAttribute("viewBox", fmtViewBox(ws.vb0));
@@ -7362,7 +8235,7 @@
       const h = Math.max(rect.y1 - rect.y0, 1e-6);
       const px = w * pad;
       const py = h * pad;
-      ws.vb = { x: rect.x0 - px, y: rect.y0 - py, w: w + 2 * px, h: h + 2 * py };
+      ws.vb = clampViewBox({ x: rect.x0 - px, y: rect.y0 - py, w: w + 2 * px, h: h + 2 * py }, ws.vb0, ws.opts.maxZoom);
       applyViewBox();
     }
     return { reportView, applyLinkedView, applyAspect, applyViewBox, resetZoom, zoomTo };
@@ -7783,6 +8656,10 @@
     isSeriesElem,
     nearestKey,
     zoomViewBox,
+    zoomViewBoxCapped,
+    clampZoomFactor,
+    clampViewBox,
+    atMaxZoom,
     parseViewBox,
     fmtViewBox,
     unionBbox,
@@ -7793,6 +8670,7 @@
     idSelector,
     findWidgetById,
     normalizeElements,
+    decodeBbox,
     isZoomedIn,
     userToCanvas,
     nearestSortedIdx,
