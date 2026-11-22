@@ -36,7 +36,6 @@ range(stocks$date)
 ```{r}
 a <- vplot(stocks, width = 7, height = 3.6) |>
   mark_line(x = date, y = close, color = index) |>
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y") |>
   labs(title = "European stock indices, {format(frame_along, '%B %Y')}",
        x = NULL, y = "closing price") |>
   transition_reveal(date) |>

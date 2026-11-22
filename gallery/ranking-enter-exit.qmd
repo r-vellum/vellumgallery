@@ -20,7 +20,6 @@ bar found in only one of them fades in or out on the spot.
 library(gapminder)
 
 eu <- as.data.frame(gapminder[gapminder$continent == "Europe", ])
-eu$country <- as.character(eu$country) # only the countries actually shown
 top5 <- do.call(rbind, lapply(split(eu, eu$year), function(d) {
   d <- head(d[order(-d$gdpPercap), ], 5)
   d$rank <- 1:5
@@ -79,7 +78,7 @@ The fade runs on the alpha easing, so `ease_aes(alpha = ...)` shapes it separate
 the movement. Because the scales are trained once over all the years, a country that
 enters gets the same colour and is measured against the same axis as everyone else.
 
-Two details in the data matter. `eu$country` is converted to character so the colour
-scale only knows the ten countries that appear (a factor would keep all 142 levels of
-`gapminder$country`), and the axis is extended to 60 000 so the labels to the right
-of the longest bar stay inside the panel.
+One detail in the data matters: the axis is extended to 60 000 so the labels to the
+right of the longest bar stay inside the panel. `eu$country` can stay a factor: the
+colour scale drops the levels no row uses, as in ggplot2, so it only knows the ten
+countries that appear rather than all 142 levels of `gapminder$country`.
