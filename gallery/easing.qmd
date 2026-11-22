@@ -1,0 +1,99 @@
+---
+title: "Easing, side by side"
+description: "The same two-state animation under five easing curves, plus one with a separate easing for colour: six animated SVGs inlined on one page, each running on its own clock."
+categories: [Animation]
+image: figs/easing-poster.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+Easing decides how the interpolation fraction travels from 0 to 1 during a
+transition. With `"linear"` it moves at a constant rate; the other curves start slowly,
+end slowly, overshoot or bounce. `ease_aes()` sets it for a whole animation, and its
+`position`, `color`, `size` and `alpha` arguments override it for one class of property.
+
+`animate()` takes one plot, not a composition, so a comparison is several animations.
+Here one helper builds the same scene, a dot that travels from one end of a track to the
+other while its colour changes, once per easing:
+
+```{r}
+track <- data.frame(state = c("start", "end"), x = c(0, 10), y = 0, v = c(0, 1))
+
+ease_demo <- function(ease, ..., title = ease) {
+  vplot(track, width = 3.4, height = 1.4) |>
+    mark_point(x = x, y = y, color = v, size = 3) |>
+    scale_x_continuous(limits = c(-1, 11), breaks = c(0, 5, 10)) |>
+    scale_color_gradient(low = "#3a5a80", high = "#c1121f") |>
+    guides(color = "none") |>
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+          panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank()) |>
+    labs(title = title, x = NULL, y = NULL) |>
+    transition_states(state, transition_length = 3, state_length = 1) |>
+    ease_aes(ease, ...) |>
+    animate(nframes = 64, fps = 20)
+}
+
+demos <- list(
+  linear         = ease_demo("linear"),
+  cubic          = ease_demo("cubic-in-out"),
+  back           = ease_demo("back-out"),
+  elastic        = ease_demo("elastic-out"),
+  bounce         = ease_demo("bounce-out"),
+  bounce_colour  = ease_demo("bounce-out", color = "linear",
+                             title = "bounce-out, color = \"linear\"")
+)
+```
+
+Every demo has the same timing (64 frames at 20 fps, so 3.2 s a loop, with the dot
+held for a quarter of each half), so the six dots leave and arrive together and only the
+path between differs:
+
+```{r}
+#| echo: false
+#| results: asis
+dir.create("figs", showWarnings = FALSE)
+cells <- vapply(names(demos), function(nm) {
+  f <- file.path("figs", paste0("easing-", nm, ".svg"))
+  anim_save(f, demos[[nm]])
+  paste0('<div class="easing-cell">', paste(readLines(f, warn = FALSE), collapse = "\n"), "</div>")
+}, character(1))
+cat("\n```{=html}\n", '<style>.easing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.75rem;margin:1rem 0}',
+    '.easing-cell svg{width:100%;height:auto;display:block}</style>\n',
+    '<div class="easing-grid">\n', paste(cells, collapse = "\n"), "\n</div>\n```\n\n", sep = "")
+render_plot(
+  vplot(track, width = 3.4, height = 1.4) |>
+    mark_point(x = x, y = y, color = v, size = 3) |>
+    scale_x_continuous(limits = c(-1, 11), breaks = c(0, 5, 10)) |>
+    scale_color_gradient(low = "#3a5a80", high = "#c1121f") |>
+    guides(color = "none") |>
+    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+          panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank()) |>
+    labs(title = "linear, cubic, back, elastic, bounce", x = NULL, y = NULL),
+  "figs/easing-poster.png", dpi = 120
+)
+```
+
+- **linear**: constant speed, an abrupt start and stop.
+- **cubic-in-out**: slow, fast, slow. The usual choice for things that should look
+  like they have mass.
+- **back-out**: runs a little past the end and comes back.
+- **elastic-out**: overshoots several times, shrinking, like a spring.
+- **bounce-out**: drops onto the end and bounces.
+
+In all five the colour follows the same curve as the position, so the blue-to-red
+change speeds up, slows down and bounces along with the dot. The last demo separates
+them: `ease_aes("bounce-out", color = "linear")` keeps the bounce for position but
+blends the colour evenly from blue to red. `position` always covers x and y together; there is one
+positional curve per animation.
+
+## Six animations, one page
+
+These six SVGs are inlined into the page's HTML rather than linked as images, so their
+styles share one document. Each animated SVG namespaces its CSS classes and keyframes
+with a prefix derived from its own content, so the six step animations, and the
+reduced-motion rule each one carries, do not override one another: every dot runs on
+its own clock. The same holds when an animation is embedded with
+`vellumwidget::as_widget()`, which also inlines the SVG.

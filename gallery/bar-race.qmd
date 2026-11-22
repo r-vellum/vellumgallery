@@ -1,6 +1,6 @@
 ---
 title: "A bar chart race, with no new API"
-description: "transition_states() over a rank column turns mark_bar() into a bar chart race: bars keyed by category slide past each other as their ranks change, on frozen scales."
+description: "transition_states() over a rank column turns mark_bar() into a bar chart race: each bar is keyed to its country by its fill, so bars slide past each other as their ranks change, on frozen scales."
 categories: [Animation]
 image: figs/bar-race-poster.png
 ---
@@ -12,9 +12,9 @@ source("_helper.R")
 
 A bar chart race is a ranking that reorders itself over time. There is no
 `mark_race()`: it falls out of `mark_bar()`, `coord_flip()` and
-`transition_states()`, because the tween engine keys each bar to its category and
-interpolates position as well as length. When two categories swap rank, their bars
-slide past each other.
+`transition_states()`, because the tween engine matches each bar to *the same
+country* in the next state and interpolates its position as well as its length. When
+two countries swap rank, their bars slide past each other.
 
 The one thing the data has to carry is the rank. Bar position comes from the `x`
 encoding, so ranking within each year and mapping `x = rank` is what makes bars move;
@@ -27,39 +27,41 @@ g <- transform(as.data.frame(gapminder), gdp = pop * gdpPercap / 1e9)
 biggest <- head(g[g$year == 2007, ][order(-g$gdp[g$year == 2007]), "country"], 10)
 
 d <- g[g$country %in% biggest, c("country", "year", "gdp")]
-d$country <- droplevels(factor(d$country))
+d$country <- droplevels(d$country)
 d <- do.call(rbind, lapply(split(d, d$year), function(s) {
   s$rank <- rank(s$gdp, ties.method = "first")
-  s
+  s[order(-s$rank), ] # rows in rank order: the tween does not care
 }))
-
-# One row per state, for the year stamp.
-stamp <- data.frame(year = sort(unique(d$year)), rank = 2, gdp = 12000)
 
 head(d[d$year == 1952, ], 3)
 ```
 
 Ten countries, twelve five-year steps, and a rank from 1 (smallest) to 10 (largest)
-recomputed inside each year.
+recomputed inside each year. The rows of each year are in rank order, so a country sits
+on a different row from one year to the next. That does not matter: a bar's identity
+is its group, and with no `group` or `data_id` given, the group is the combination of
+the layer's discrete mappings, here `fill = country`. The text layer is keyed the same
+way, by its discrete `label = country`.
 
 ```{r}
 a <- vplot(d, width = 7, height = 4.5, dpi = 150) |>
   mark_bar(x = rank, y = gdp, fill = country) |>
-  mark_text(x = rank, y = gdp, label = country, hjust = 0, size = 3.6) |>
-  mark_text(x = rank, y = gdp, label = year, data = stamp, size = 13, color = "grey70") |>
+  mark_text(x = rank, y = gdp + 150, label = country, hjust = 0, size = 10) |>
   coord_flip() |>
   guides(fill = "none") |>
   scale_y_continuous(limits = c(0, 16000)) |>
   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
-  transition_states(year, transition_length = 1, state_length = 2) |>
-  labs(title = "Total GDP, the ten largest economies of 2007",
+  labs(title = "Total GDP of the ten largest economies of 2007, in {closest_state}",
        x = NULL, y = "billions of 1990 dollars") |>
-  animate(nframes = 72, fps = 14)
+  transition_states(year, transition_length = 2, state_length = 1, wrap = FALSE) |>
+  animate(nframes = 330, fps = 25)
 ```
 
 ```{r}
 #| echo: false
-vg_anim(a, "bar-race", ext = "gif")
+dir.create("figs", showWarnings = FALSE)
+anim_save("figs/bar-race.svg", a)
+knitr::include_graphics("figs/bar-race.svg")
 ```
 
 ```{r}
@@ -68,21 +70,19 @@ vg_anim(a, "bar-race", ext = "gif")
 last <- d[d$year == 2007, ]
 poster <- vplot(last, width = 7, height = 4.5, dpi = 150) |>
   mark_bar(x = rank, y = gdp, fill = country) |>
-  mark_text(x = rank, y = gdp, label = country, hjust = 0, size = 3.6) |>
-  mark_text(x = rank, y = gdp, label = year, data = stamp[stamp$year == 2007, ],
-            size = 13, color = "grey70") |>
+  mark_text(x = rank, y = gdp + 150, label = country, hjust = 0, size = 10) |>
   coord_flip() |>
   guides(fill = "none") |>
   scale_y_continuous(limits = c(0, 16000)) |>
   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
-  labs(title = "Total GDP, the ten largest economies of 2007",
+  labs(title = "Total GDP of the ten largest economies of 2007, in 2007",
        x = NULL, y = "billions of 1990 dollars")
-render_plot(poster, "figs/bar-race-poster.png", dpi = 150)
+render_plot(poster, "figs/bar-race-poster.png", dpi = 100)
 ```
 
 China starts seventh of the ten and takes second place off Japan in 2002. Japan had
-climbed to second in 1972 and held it through five steps. India sits eighth as late as
-1997, then passes the United Kingdom, France and Germany to reach fourth by 2007. The
+climbed to second in 1972 and held it until then. India sits eighth as late as 1997,
+then passes Italy, France, the United Kingdom and Germany to reach fourth by 2007. The
 United States never moves. Labels ride their bars, so you can follow one country through
 the reshuffling instead of re-reading the axis every time the order changes.
 
@@ -94,22 +94,23 @@ scales were trained once across all twelve years and frozen, which is why the ax
 jumps: 1952 is drawn against the same 16000-billion axis as 2007, and the growth is
 legible as growth rather than as a rescaling.
 
-`transition_length` and `state_length` set the rhythm. The 1:2 ratio here holds each
-year twice as long as the slide into it, which leaves the ranking readable at rest and
-still shows the overtakes. Setting `state_length = 0` gives constant motion with nothing
-to read.
+`transition_length` and `state_length` set the rhythm. With 2:1 and `wrap = FALSE`,
+the 330 frames give each of the eleven moves about 20 frames and hold each year for
+about 10, so the overtakes are visible and the ranking is readable at rest. `wrap =
+FALSE` ends the animation on 2007 instead of adding a twelfth move that slides every
+bar back to its 1952 place. The file still loops, so playback cuts from 2007 straight
+back to 1952 and starts again.
 
-The year stamp is a `mark_text()` layer over its own twelve-row table, one row per state.
-A layer's own `data =` is filtered to the current keyframe whenever it carries the state
-column, so each frame stamps one year; a layer whose data has no `year` column would
-instead persist unchanged through the whole animation, which is what you want for a
-caption or a reference line.
+The year in the title is a frame variable. `labs()` text may embed `{...}`
+expressions, glue-style, evaluated on every frame: `{closest_state}` is the year the
+frame is nearest to, and it flips halfway through each move, at the same moment the
+labels would if their text changed. `{previous_state}`, `{next_state}`,
+`{transitioning}`, `{frame}` and `{progress}` are there too.
 
-## GIF, for once
+## Format
 
-The output is a GIF, which is the right choice here and the wrong one for
-[the Gapminder bubbles](gapminder.qmd). GIF allows 256 colours per frame; this animation
-uses ten flat fills, a grey panel and some text, so nothing is lost, and the file stays
-small enough to sit in a page. Antialiased bubbles over a smooth colour ramp are the
-opposite case, and that page uses an APNG. The third option, `.svg`, is in
-[An animation with no pixels in it](animated-svg.qmd).
+The output is an animated SVG. Ten bars, ten labels and an axis are a light scene, so
+330 frames come to under 3 MB of markup, and because SVG is text it travels compressed:
+under 100 KB over the wire. The same animation as a GIF is around 10 MB. A GIF is still
+the choice when the animation must go somewhere that only takes images, such as a
+slide or a chat message: `anim_save("race.gif", a)`.

@@ -1,8 +1,8 @@
 ---
 title: "Animated bubble chart (gapminder)"
-description: "Keyframe animation: a Gapminder bubble chart flowing over year, with scales frozen once across all years and frames tweened in the Rust backend."
+description: "Keyframe animation: a Gapminder bubble chart flowing over year, each bubble keyed to its country, the year counting in the title, on scales frozen once across all years."
 categories: [Animation]
-image: figs/gapminder.png
+image: figs/gapminder-poster.png
 ---
 
 ```{r}
@@ -12,38 +12,66 @@ source("_helper.R")
 
 vellumplot animates a plot by compiling one **keyframe** per state and tweening the
 frames between them. The scales are trained **once over every state and frozen**, so
-the axes, the colour ramp and the size legend stay put while the data moves. The
+the axes, the colour key and the size legend stay put while the data moves. The
 animation is non-reactive: the states are fixed up front and nothing retrains.
 
-`transition_time()` is the right idiom for a continuous time like `year`: it
-allocates frames in proportion to the gaps between years and never pauses or wraps,
-so the bubbles glide at a constant rate. `animate()` compiles the keyframes and
-`anim_save()` tweens, renders (in parallel), and encodes the frames, all in one pass
-on the Rust backend. The extension chooses the format: `.png` here for a
-full-colour, lossless animated PNG (a plot's antialiased edges need more than GIF's
-256 colours per frame), or `.gif` for the smaller, universally embeddable version.
-There is a third option, `.svg`, which emits every frame as vector markup: the right
-answer for line art and the wrong one for 142 bubbles a frame, so this page is an
-APNG. See
-[An animation with no pixels in it](animated-svg.qmd) for that side of the trade.
+`transition_time()` is the idiom for a continuous time like `year`: it allocates
+frames in proportion to the gaps between years and never pauses or wraps, so the
+bubbles glide at a constant rate. `data_id = country` tells the tween which bubble
+is which: each country moves into *its own* position in the next year, whatever
+order the rows come in. The title is a template, and `{round(frame_time)}` is
+evaluated on every frame, so the year counts up between keyframes in step with the
+bubbles.
 
 ```{r}
 library(gapminder)
 
-a <- vplot(gapminder,dpi = 200) |>
-  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent) |>
+a <- vplot(transform(gapminder, pop = pop / 1e6), width = 7, height = 4.5) |>
+  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent,
+             data_id = country, alpha = 0.8) |>
   scale_x_continuous(trans = "log10") |>
-  labs(title = "Gapminder", x = "GDP per capita", y = "Life expectancy") |>
+  labs(title = "Year: {round(frame_time)}", x = "GDP per capita",
+       y = "Life expectancy", size = "population (millions)") |>
   transition_time(year) |>
-  animate(nframes = 150, fps = 25)
+  animate(nframes = 120, fps = 20)
 ```
 
-Each bubble's position and size interpolate frame to frame; colours interpolate
-perceptually in Oklab. Because the x, y and size scales were frozen over the union
-of all years, a country that is poor early and rich late keeps one stable frame of
-reference throughout.
+```{r}
+#| eval: false
+anim_save("gapminder.svg", a)
+```
 
 ```{r}
 #| echo: false
-vg_anim(a, "gapminder")
+dir.create("figs", showWarnings = FALSE)
+anim_save("figs/gapminder.svg", a)
+# A one-frame still for the gallery card: the last year, on the same encodings.
+poster <- vplot(transform(gapminder[gapminder$year == 2007, ], pop = pop / 1e6),
+                width = 7, height = 4.5) |>
+  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent, alpha = 0.8) |>
+  scale_x_continuous(trans = "log10") |>
+  labs(title = "Year: 2007", x = "GDP per capita",
+       y = "Life expectancy", size = "population (millions)")
+render_plot(poster, "figs/gapminder-poster.png", dpi = 100)
+knitr::include_graphics("figs/gapminder.svg")
 ```
+
+Each bubble's position and size interpolate frame to frame. Because the x, y and size
+scales were frozen over the union of all years, a country that is poor early and rich
+late keeps one stable frame of reference throughout: China and India, the two large
+green bubbles, climb from the bottom left while the axes stay where they are.
+
+## Why SVG here
+
+`anim_save()` picks the format from the extension. This page uses `.svg`, which writes
+every frame as vector markup in a single file, stepped by CSS: crisp at any zoom, text
+that stays text, and a first frame held still for readers whose system asks for reduced
+motion.
+
+An animated SVG grows with marks times frames, and 142 bubbles over 120 frames is
+about 3 MB on disk. But SVG is text, and web servers compress it: this file travels as
+under 200 KB, where the same animation as an animated PNG (`.png`) is about 5.5 MB
+and does not compress further. A raster format wins when a scene is truly dense (thousands
+of marks a frame, or a datashaded field); for a few hundred moving shapes, vector is
+the better trade. [An animation with no pixels in it](animated-svg.qmd) covers the
+format in more detail.
