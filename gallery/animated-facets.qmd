@@ -1,0 +1,70 @@
+---
+title: "Small multiples that move"
+description: "A faceted animation: facet_wrap() and transition_time() together, one panel per continent, every panel on the same frozen scales, each bubble kept inside its own panel."
+categories: [Animation]
+image: figs/animated-facets-poster.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+[The gapminder bubble chart](gapminder.qmd) puts every country in one panel, coloured by
+continent. Splitting it into small multiples makes each continent's path easier to
+follow, and it takes one more line: `facet_wrap()` composes with `transition_time()`
+like any other layer of the grammar.
+
+```{r}
+library(gapminder)
+
+g4 <- transform(gapminder[gapminder$continent != "Oceania", ], pop = pop / 1e6)
+g4$continent <- droplevels(g4$continent)
+
+a <- vplot(g4, width = 7, height = 4.5) |>
+  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent,
+             data_id = country, alpha = 0.7) |>
+  scale_x_continuous(trans = "log10", breaks = c(1e3, 1e4, 1e5),
+                     labels = c("1k", "10k", "100k")) |>
+  facet_wrap(~continent) |>
+  guides(color = "none") |>
+  labs(title = "Year: {round(frame_time)}", x = "GDP per capita",
+       y = "Life expectancy", size = "population (millions)") |>
+  transition_time(year) |>
+  animate(nframes = 100, fps = 20)
+```
+
+```{r}
+#| echo: false
+dir.create("figs", showWarnings = FALSE)
+anim_save("figs/animated-facets.svg", a)
+poster <- vplot(g4[g4$year == 2007, ], width = 7, height = 4.5) |>
+  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent, alpha = 0.7) |>
+  scale_x_continuous(trans = "log10", breaks = c(1e3, 1e4, 1e5),
+                     labels = c("1k", "10k", "100k")) |>
+  facet_wrap(~continent) |>
+  guides(color = "none") |>
+  labs(title = "Year: 2007", x = "GDP per capita",
+       y = "Life expectancy", size = "population (millions)")
+render_plot(poster, "figs/animated-facets-poster.png", dpi = 100)
+knitr::include_graphics("figs/animated-facets.svg")
+```
+
+Oceania's two countries are left out to keep the grid at two by two, and
+`droplevels()` drops its now-empty level so it gets no panel.
+
+## What faceting changes
+
+- **Every panel in every frame.** The panels come from the whole data, so the grid is
+  fixed for the length of the animation. A year in which a continent had no rows would
+  leave its panel empty rather than removing it.
+- **Identity includes the panel.** A bubble is matched by `data_id = country` *within*
+  its panel, so it never slides from one panel into another. Here each country stays in
+  its continent; in data where a row's facet value changes between states, the mark
+  fades out of one panel and into the other.
+- **Shared, frozen scales.** The scales are trained once over all years and all panels,
+  so the panels can be compared with each other and with themselves over time. Free
+  scales (`facet_wrap(scales = "free")`) would have to retrain per frame and are
+  refused for an animation.
+
+The output is an animated SVG of about 3.4 MB, around 350 KB compressed on the wire.

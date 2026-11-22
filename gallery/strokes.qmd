@@ -1,6 +1,6 @@
 ---
 title: "What a stroke can be"
-description: "Gradient strokes, a width and colour per segment, dash phase, an outline you can fill, pixel-snapped hairlines, and haloed text: the paint model applied to lines rather than to fills."
+description: "Gradient strokes, a width and colour per segment, dash phase and marching ants, an outline you can fill, pixel-snapped hairlines, and haloed text: the paint model applied to lines rather than to fills."
 categories: [Backend]
 image: figs/strokes.png
 ---
@@ -81,7 +81,7 @@ vs(bars, "strokes-per-segment")
 
 `dash_phase` sets how far into the dash pattern a line starts, in multiples of
 `lwd`, so it scales with the line width exactly as the dashes do. Static, it aligns
-dashes across adjacent strokes; animated, it is marching ants.
+dashes across adjacent strokes, or staggers them as here:
 
 ```{r}
 dashes <- vl_scene(width = 7, height = 2, dpi = 150, bg = "#faf5ea")
@@ -97,6 +97,41 @@ for (i in 0:4) {
 #| echo: false
 vs(dashes, "strokes-dash-phase")
 ```
+
+Animated, it is marching ants. `vl_render_animation()` tweens between two scenes,
+and `dash_phase` is one of the properties it interpolates. The `"dashed"` pattern is
+4 on, 4 off, a period of 8 line widths, so a phase that runs from 0 to 8 ends exactly
+where it started and the loop has no seam:
+
+```{r}
+set.seed(11)
+px <- runif(150)
+py <- runif(150)
+selection <- function(phase) {
+  vl_scene(width = 7, height = 2.4, dpi = 150, bg = "#faf5ea") |>
+    draw(points_grob(px, py, size = vl_unit(2.2, "mm"),
+                     gp = vl_gpar(fill = "#6b4f2c", col = NA, alpha = 0.6))) |>
+    draw(rect_grob(x = 0.55, y = 0.5, width = 0.3, height = 0.6,
+                   gp = vl_gpar(fill = NA, col = "#3a2f1e", lwd = 2,
+                                lty = "dashed", dash_phase = phase)))
+}
+
+n <- 16 # frames per loop; frame i sits (i - 1) / n of the way from phase 0 to 8
+vl_render_animation(
+  list(selection(0), selection(8)),
+  seg = rep(1L, n), frac = (seq_len(n) - 1) / n,
+  path = "figs/strokes-ants.svg", format = "svg", fps = 16
+)
+```
+
+```{r}
+#| echo: false
+knitr::include_graphics("figs/strokes-ants.svg")
+```
+
+Only the dash offset changes between the two scenes; the points are identical in
+both, so they stand still while the outline crawls. The file is an animated SVG of
+16 frames, about 190 KB, most of it the 150 points drawn again in every frame.
 
 ## An outline you can fill
 

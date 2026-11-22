@@ -19,43 +19,69 @@ solved scene can be written as vector markup.
 SVG: every frame emitted in full, shown in turn by a CSS step animation. No
 JavaScript, nothing to load, one file.
 
-A three-state transition over `cyl`, tweened by the engine:
+The data is R's `USPersonalExpenditure`: five spending categories, measured every five
+years from 1940 to 1960. The same five categories appear in every year, so each bar
+has a stable identity (its category, the discrete `x`) and the engine tweens it from
+one year's length and colour to the next.
 
 ```{r}
-cars <- data.frame(
-  wt = mtcars$wt, mpg = mtcars$mpg, hp = mtcars$hp,
-  cyl = paste(mtcars$cyl, "cylinders")
+x <- USPersonalExpenditure
+spend <- data.frame(
+  category = rep(rownames(x), ncol(x)),
+  year     = rep(colnames(x), each = nrow(x)),
+  billions = as.vector(x)
 )
 
-a <- vplot(cars, width = 6.5, height = 4) |>
-  mark_point(x = wt, y = mpg, size = hp / 45, color = "#6b4f2c", alpha = 0.85) |>
-  transition_states(cyl) |>
-  labs(title = "Weight against mileage, by engine",
-       x = "weight (1000 lbs)", y = "miles per gallon") |>
-  animate(fps = 12, nframes = 48)
+a <- vplot(spend, width = 6.5, height = 3.2) |>
+  mark_bar(x = category, y = billions, fill = billions) |>
+  coord_flip() |>
+  scale_fill_gradient(low = "#e6d3a8", high = "#7a2e0e") |>
+  guides(fill = "none") |>
+  labs(title = "US personal expenditure, {closest_state}",
+       x = NULL, y = "billions of dollars") |>
+  transition_states(year, transition_length = 2, state_length = 1) |>
+  ease_aes("cubic-in-out", color = "linear") |>
+  animate(fps = 25, nframes = 150)
 ```
 
 ```{r}
 #| echo: false
 dir.create("figs", showWarnings = FALSE)
 anim_save("figs/animated-svg.svg", a)
-# A first-frame poster for the gallery card.
+# A one-frame poster for the gallery card: the last year.
 render_plot(
-  vplot(cars[grepl("^4", cars$cyl), ], width = 6.5, height = 4) |>
-    mark_point(x = wt, y = mpg, size = hp / 45, color = "#6b4f2c", alpha = 0.85) |>
-    labs(title = "Weight against mileage, by engine",
-         x = "weight (1000 lbs)", y = "miles per gallon"),
-  "figs/animated-svg-poster.png", dpi = 150
+  vplot(spend[spend$year == "1960", ], width = 6.5, height = 3.2) |>
+    mark_bar(x = category, y = billions, fill = billions) |>
+    coord_flip() |>
+    scale_fill_gradient(low = "#e6d3a8", high = "#7a2e0e",
+                        limits = range(spend$billions)) |>
+    guides(fill = "none") |>
+    labs(title = "US personal expenditure, 1960",
+         x = NULL, y = "billions of dollars"),
+  "figs/animated-svg-poster.png", dpi = 100
 )
 knitr::include_graphics("figs/animated-svg.svg")
 ```
 
 ```{r}
 #| eval: false
-anim_save("engines.svg", a)
+anim_save("spending.svg", a)
 ```
 
-Two things come free with the format. It is resolution-independent, so it is as
+Three things in that code are about the animation rather than the chart:
+
+- `{closest_state}` in the title is a frame variable. Title, subtitle and caption text
+  is evaluated on every frame, so the year changes in step with the bars, flipping
+  halfway through each move.
+- `ease_aes("cubic-in-out", color = "linear")` gives the bars two clocks. Position
+  and length follow the cubic curve: each move starts slowly, speeds up and settles
+  gently into the next year. Colour gets its own linear easing, so the fill changes
+  at a constant rate across the whole move instead of bunching up in the middle. The
+  other classes are `size` and `alpha` (the latter also times marks fading in and
+  out); x and y share one positional curve.
+- `wrap = TRUE`, the default, slides 1960 back to 1940 to close the loop.
+
+Two more things come free with the format. It is resolution-independent, so it is as
 crisp on a retina screen or at 400% zoom as it is here. And it honours
 `prefers-reduced-motion`: a reader whose system says "do not animate" gets the first
 frame, held. That is handled inside the SVG itself rather than by a script that may
@@ -68,16 +94,16 @@ frames, where a raster format's does not. That makes the trade sharp rather than
 matter of taste:
 
 - Line art, a handful of moving marks, the ordinary explanatory animation: SVG wins
-  outright.
-- A dense scatter or a datashaded field: a raster format is the right answer.
+  outright. This one is under 1 MB of markup and about 15 KB once the web server compresses
+  it.
+- A dense scatter or a datashaded field: a raster format (`.gif`, or `.png` for an
+  animated PNG) is the right answer.
 
 `anim_save()` will tell you when a `.svg` scene is dense enough that GIF or APNG
-would likely be smaller, so you do not have to guess. For the raster side of the
-same API, and for the tweening, easing, and frozen-scale machinery underneath, see
-[the animated gapminder bubble chart](gapminder.qmd), which is an APNG for this
-reason.
+would likely be smaller, so you do not have to guess. A few hundred moving marks are
+still fine as SVG: see [the animated gapminder bubble chart](gapminder.qmd).
 
 An animation also goes into a widget: `vellumwidget::as_widget()` accepts a
-`vellum_animation` and embeds this same animated SVG, self-contained. Since every
-mark moves each frame there is no per-element interaction index behind it. It plays;
-it does not respond.
+`vellum_animation` and embeds it with play/pause and a frame scrubber. Since every
+mark moves each frame there is no per-element interaction index behind it: you can
+stop it and scrub it, but the marks do not respond to hover.
