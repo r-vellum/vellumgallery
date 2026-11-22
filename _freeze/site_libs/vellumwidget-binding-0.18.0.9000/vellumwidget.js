@@ -189,15 +189,16 @@
 }
 .vellumwidget-toolbar button:hover { background: rgba(0,0,0,0.08); }
 .vellumwidget-toolbar button.vellumwidget-active { background: rgba(37,99,235,0.18); }
-/* Animation playback controls (VW-55): a small bar in the stage's bottom-left
-   corner. The button stays visible (a pause control must be findable); the
-   scrubber shows on hover or keyboard focus. */
+/* Animation playback controls (VW-55): a small bar in a row of its own below
+   the plot (VW-60: over the plot it covered a long x title), 30px tall in all
+   (the widget's default height reserves it). The button and the scrubber are
+   always shown. */
 .vellumwidget-anim {
-  position: absolute; left: 4px; bottom: 4px; z-index: 25; display: flex; align-items: center; gap: 4px;
+  position: relative; display: flex; width: max-content; max-width: 100%; box-sizing: border-box;
+  align-items: center; gap: 4px; margin-top: 4px; height: 26px;
   padding: 2px; border-radius: 6px; background: rgba(255,255,255,0.78);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.18); opacity: 0.7; transition: opacity 0.12s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
 }
-.vellumwidget-root:hover .vellumwidget-anim, .vellumwidget-anim:focus-within { opacity: 1; }
 .vellumwidget-anim-btn {
   border: 0; background: transparent; cursor: pointer; border-radius: 4px; color: #111827;
   width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
@@ -206,11 +207,7 @@
 .vellumwidget-anim-btn:focus-visible, .vellumwidget-anim-range:focus-visible {
   outline: 2px solid var(--vellumwidget-focus-stroke, #2563eb); outline-offset: 1px;
 }
-.vellumwidget-anim-range { width: 0; margin: 0; opacity: 0; transition: width 0.12s, opacity 0.12s; accent-color: #2563eb; }
-.vellumwidget-root:hover .vellumwidget-anim-range, .vellumwidget-anim:focus-within .vellumwidget-anim-range { width: 110px; margin: 0 4px 0 0; opacity: 1; }
-@media (prefers-reduced-motion: reduce) {
-  .vellumwidget-anim, .vellumwidget-anim-range { transition: none; }
-}
+.vellumwidget-anim-range { width: 140px; max-width: calc(100% - 30px); margin: 0 4px 0 0; accent-color: #2563eb; }
 @media (prefers-color-scheme: dark) {
   .vellumwidget-tip { background: var(--vellumwidget-tip-bg, rgba(243,244,246,0.96)); color: var(--vellumwidget-tip-fg, #111827); }
   .vellumwidget-toolbar { background: rgba(31,41,55,0.9); }
@@ -1025,12 +1022,14 @@
       announce(focusLabel(k));
     }
     function onMarkFocus(ev) {
+      if (ws.focusHold) return;
       const k = keyOf(ev.target);
       if (k == null) return;
       const i = ws.focusables.findIndex((f) => f.key === k);
       if (i >= 0) showMarkFocus(i);
     }
     function onMarkBlur(ev) {
+      if (ws.focusHold) return;
       const to = keyOf(ev.relatedTarget);
       if (to == null) {
         ws.focusIdx = -1;
@@ -1261,6 +1260,7 @@
     let playT0 = 0;
     let playFrom = 0;
     let raf = 0;
+    let endTimer = 0;
     function now() {
       return typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
     }
@@ -1305,10 +1305,34 @@
       syncRange(currentFrame());
       raf = window.requestAnimationFrame(tick);
     }
+    function clearEnd() {
+      if (endTimer) clearTimeout(endTimer);
+      endTimer = 0;
+    }
+    function armEnd() {
+      clearEnd();
+      if (!info || ws.opts.loop !== false) return;
+      const n = info.frames.length;
+      const ms = Math.max(0, (n - 1 - playFrom) * info.dt * 1e3);
+      endTimer = window.setTimeout(function() {
+        endTimer = 0;
+        if (!info || !playing) return;
+        frame = n - 1;
+        playing = false;
+        ws.el.classList.add("vellumwidget-anim-paused");
+        ws.el.classList.remove("vellumwidget-anim-playing");
+        if (raf && typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(raf);
+        raf = 0;
+        showFrame(frame);
+        syncRange(frame);
+        syncButton();
+      }, ms);
+    }
     function setPlaying(on) {
       if (!info) return;
       if (on === playing) return;
       if (!on) frame = currentFrame();
+      if (on && ws.opts.loop === false && frame >= info.frames.length - 1) frame = 0;
       playing = on;
       ws.el.classList.toggle("vellumwidget-anim-paused", !on);
       ws.el.classList.toggle("vellumwidget-anim-playing", on);
@@ -1321,7 +1345,9 @@
           for (let i = 0; i < as.length; i++) as[i].currentTime = t;
         }
         if (typeof window.requestAnimationFrame === "function" && !raf) raf = window.requestAnimationFrame(tick);
+        armEnd();
       } else {
+        clearEnd();
         if (raf && typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(raf);
         raf = 0;
         showFrame(frame);
@@ -1339,6 +1365,7 @@
       syncRange(k);
     }
     function teardown() {
+      clearEnd();
       if (raf && typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(raf);
       raf = 0;
       if (bar) bar.remove();
@@ -1382,10 +1409,16 @@
       });
       bar.appendChild(btn);
       bar.appendChild(range);
-      ws.stage.appendChild(bar);
+      ws.el.appendChild(bar);
       frame = info.still;
       playing = false;
       if (reducedMotion()) {
+        ws.el.classList.add("vellumwidget-anim-paused");
+        showFrame(frame);
+        syncRange(frame);
+        syncButton();
+      } else if (ws.opts.autoplay === false) {
+        frame = 0;
         ws.el.classList.add("vellumwidget-anim-paused");
         showFrame(frame);
         syncRange(frame);
@@ -2146,6 +2179,36 @@
     }
     return statics();
   }
+  function axisTicksAtDecimals(ax, lo, hi, n, dec) {
+    if (!(hi > lo) || dec < 0 || ax.type === "discrete" || ax.type === "binned") return null;
+    if (ax.time_unit === "day" || ax.time_unit === "second" || !NICE_TRANSFORMS[ax.transform]) return null;
+    const sq = ax.transform === "sqrt";
+    const a = nativeToData(ax, sq ? Math.max(lo, 0) : lo), b = nativeToData(ax, sq ? Math.max(hi, 0) : hi);
+    const dlo = Math.min(a, b), dhi = Math.max(a, b);
+    const mults = [1, 2, 5];
+    for (let m = 0; m < mults.length; m++) {
+      const step = mults[m] * Math.pow(10, -dec);
+      const vals = [];
+      for (let v = Math.ceil(dlo / step - 1e-9) * step; v <= dhi + step * 1e-9 && vals.length <= 2 * n + 1; v += step) {
+        vals.push(Math.round(v / step) * step);
+      }
+      if (vals.length < 2) return null;
+      if (vals.length <= Math.max(2, 2 * n) || m === mults.length - 1) {
+        return vals.map(function(d) {
+          return { n: dataToNative(ax, d), label: fmtTick(d, step) };
+        });
+      }
+    }
+    return null;
+  }
+  function labelDecimals(labels) {
+    let dec = 0;
+    for (let i = 0; i < labels.length; i++) {
+      const m = /\.(\d+)$/.exec(labels[i]);
+      if (m && m[1].length > dec) dec = m[1].length;
+    }
+    return dec;
+  }
   function parseSecLabels(labels) {
     if (labels.length < 2) return null;
     const NUM = /[-+\u2212]?(?:\d{1,3}(?:,\d{3})+|\d+)?(?:\.\d+)?(?:[eE][-+]?\d+)?/;
@@ -2698,6 +2761,33 @@
     function noteLabelWidth(lab, w) {
       if (lab.title && lab.w0 !== void 0) lab.title.need = Math.max(lab.title.need, w - lab.w0);
     }
+    function fitYTicks(lab, ax, lo, hi, ticks) {
+      const title = lab.title;
+      if (!ax || !title || lab.w0 === void 0 || !ws.retickLayer) return ticks;
+      const over = function(tk) {
+        let w = 0;
+        for (let i = 0; i < tk.length; i++) w = Math.max(w, measureLabel(tk[i].label, lab));
+        return w - lab.w0 - title.room;
+      };
+      if (over(ticks) <= 0.5) return ticks;
+      let best = ticks;
+      for (let dec = labelDecimals(ticks.map(function(x) {
+        return x.label;
+      })) - 1; dec >= 0; dec--) {
+        const tk = axisTicksAtDecimals(ax, lo, hi, 5, dec);
+        if (!tk) break;
+        best = tk;
+        if (over(tk) <= 0.5) break;
+      }
+      return best;
+    }
+    function measureLabel(text, lab) {
+      const t = axisLabel(text, lab.pos, 0, lab.anchor, lab.baseline, lab.rot);
+      ws.retickLayer.appendChild(t);
+      const w = labelWidth(t);
+      ws.retickLayer.removeChild(t);
+      return w;
+    }
     function hideStaticAxes() {
       if (!ws.svgEl) return;
       const grids = ws.svgEl.querySelectorAll('[role="grid"]');
@@ -2900,7 +2990,8 @@
         const k = (ay.native_hi - ay.native_lo) / (p.py1 - p.py0);
         const nA = ay.native_hi - ((p.py0 - t.ty) / t.sy - p.py0) * k;
         const nB = ay.native_hi - ((p.py1 - t.ty) / t.sy - p.py0) * k;
-        const ticks = axisTicks(ay, Math.min(nA, nB), Math.max(nA, nB), 5);
+        let ticks = axisTicks(ay, Math.min(nA, nB), Math.max(nA, nB), 5);
+        if (a.yLab) ticks = fitYTicks(a.yLab, ay, Math.min(nA, nB), Math.max(nA, nB), ticks);
         for (let i = 0; i < ticks.length; i++) {
           const py = p.py0 + (ay.native_hi - ticks[i].n) / k;
           const sy = t.sy * py + t.ty;
@@ -3005,7 +3096,7 @@
       }
       return ALPHA_CODE + p;
     }
-    function condStateSet(tag, tagged, members, active, look, colors) {
+    function condStateSet(tag, tagged, members, active, look, own, ownAlpha) {
       const cond = ws.msCond;
       if (!cond || !ws.dl) return;
       let ids = tagIds[tag];
@@ -3018,8 +3109,17 @@
           cond[id] = 0;
           continue;
         }
-        const own = colors ? colors[i] : null;
-        cond[id] = own != null ? colorCode(own) : code;
+        const v = own ? own[i] : null;
+        if (v == null) {
+          cond[id] = code;
+          continue;
+        }
+        if (!ownAlpha) {
+          cond[id] = colorCode(v);
+          continue;
+        }
+        const a = Number(v);
+        cond[id] = v !== "" && isFinite(a) && a >= 0 && a <= 1 ? alphaCode(a) : code;
       }
     }
     function updateMarkStates() {
@@ -3188,6 +3288,19 @@
       raised = [];
     }
     function raiseSelected() {
+      const active = document.activeElement;
+      const keep = active && active !== document.body && ws.el.contains(active) ? active : null;
+      ws.focusHold = true;
+      try {
+        moveSelected();
+        if (keep && keep.isConnected && document.activeElement !== keep && typeof keep.focus === "function") {
+          keep.focus({ preventScroll: true });
+        }
+      } finally {
+        ws.focusHold = false;
+      }
+    }
+    function moveSelected() {
       restore();
       if (ws.fx.ringMode()) return;
       const keys = ws.fx.selectedKeys();
@@ -5024,6 +5137,10 @@
       const s = node.getAttribute("stroke");
       if (s && s !== "none") n.style.stroke = color;
     }
+    function ownAlpha(own, look) {
+      const lk = condLook("alpha", own);
+      return lk.kind === "alpha" ? lk : look;
+    }
     function clearCondNode(node) {
       node.classList.remove("vellumwidget-cond-dim");
       const n = node;
@@ -5043,17 +5160,18 @@
         const tag = c.tag || c.selection + ":" + c.aes;
         const tagged = ws.condTagElems[tag] || [];
         const look = condLook(c.aes, c.if_false);
-        const vals = isColorAes(c.aes) ? ws.condTagVals[tag] || null : null;
+        const colorAes = isColorAes(c.aes);
+        const vals = colorAes || isAlphaAes(c.aes) ? ws.condTagVals[tag] || null : null;
         const sel = selByName[c.selection];
         const members = sel ? selectionMembers(sel) : {};
         const active = Object.keys(members).length > 0 || c.empty === false;
-        if (ms) ws.fx.condStateSet(tag, tagged, members, active, look, vals);
+        if (ms) ws.fx.condStateSet(tag, tagged, members, active, look, vals, !colorAes);
         if (ring) continue;
         for (let i = 0; i < tagged.length; i++) {
           const nodes = ws.fx.elementsForKey(tagged[i]);
           const member = !!members[tagged[i]];
           const own = vals ? vals[i] : null;
-          const lk = own != null ? { kind: "color", color: own } : look;
+          const lk = own == null ? look : colorAes ? { kind: "color", color: own } : ownAlpha(own, look);
           for (let j = 0; j < nodes.length; j++) {
             clearCondNode(nodes[j]);
             if (active && !member) styleCondNode(nodes[j], lk);
@@ -7017,6 +7135,7 @@
     function clearPointData() {
       ws.ptCx = ws.ptCy = ws.ptRad = null;
       ws.ptRGB = null;
+      ws.ptShape = null;
       ws.ptN = 0;
       ws.ptAllRound = false;
       hideCanvas();
@@ -7051,9 +7170,10 @@
         } catch (e) {
           return;
         }
-        const cx = [], cy = [], rad = [], rgb = [];
+        const cx = [], cy = [], rad = [], rgb = [], shp = [];
         let allRound = true;
         const known = markColorTable(colors, els.length);
+        const shapes = markShapes(colors, els.length);
         for (let i = 0; i < els.length; i++) {
           const e = els[i];
           if (!hasBbox(e)) continue;
@@ -7069,12 +7189,14 @@
           const c = known ? known.pal[known.idx[i]] : null;
           if (c) rgb.push(c[0], c[1], c[2], c[3]);
           else rgb.push(data[o], data[o + 1], data[o + 2], 255);
+          if (shapes) shp.push(shapes[i] ? shapes[i] - 1 : 0);
         }
         ws.ptN = cx.length;
         ws.ptCx = Float64Array.from(cx);
         ws.ptCy = Float64Array.from(cy);
         ws.ptRad = Float64Array.from(rad);
         ws.ptRGB = Uint8Array.from(rgb);
+        ws.ptShape = shapes ? Uint8Array.from(shp) : null;
         ws.ptAllRound = allRound && cx.length > 0;
         drawPoints();
       };
@@ -7090,6 +7212,11 @@
       const src = asColumn(colors.pal);
       for (let k = 0; k < src.length; k++) pal.push(hexRGBA(String(src[k])));
       return { pal, idx };
+    }
+    function markShapes(colors, n) {
+      if (!colors || !colors.shape) return null;
+      const s = dlColumn(colors.shape);
+      return s.length === n ? s : null;
     }
     function hexRGBA(s) {
       const h = /^#([0-9a-f]+)$/i.exec(s.trim());
@@ -7139,11 +7266,25 @@
       const W = ws.canvasEl.width, H = ws.canvasEl.height;
       ctx.clearRect(0, 0, W, H);
       const cx = ws.ptCx, cy = ws.ptCy, rad = ws.ptRad, rgb = ws.ptRGB, n = ws.ptN;
+      const shp = ws.ptShape && ws.ptShape.length === n ? ws.ptShape : null;
       const dot = function(px, py, r, i) {
-        ctx.beginPath();
-        ctx.arc(px, py, Math.max(0.75, r), 0, 6.283185307179586);
         const a = rgb[i * 4 + 3];
-        ctx.fillStyle = a === 255 ? "rgb(" + rgb[i * 4] + "," + rgb[i * 4 + 1] + "," + rgb[i * 4 + 2] + ")" : "rgba(" + rgb[i * 4] + "," + rgb[i * 4 + 1] + "," + rgb[i * 4 + 2] + "," + a / 255 + ")";
+        const style = a === 255 ? "rgb(" + rgb[i * 4] + "," + rgb[i * 4 + 1] + "," + rgb[i * 4 + 2] + ")" : "rgba(" + rgb[i * 4] + "," + rgb[i * 4 + 1] + "," + rgb[i * 4 + 2] + "," + a / 255 + ")";
+        const rr = Math.max(0.75, r);
+        const sh = shp ? shp[i] : 0;
+        ctx.beginPath();
+        if (!sh) {
+          ctx.arc(px, py, rr, 0, 6.283185307179586);
+        } else {
+          tracePoint(ctx, sh, px, py, rr);
+        }
+        if (isLineGlyph(sh)) {
+          ctx.strokeStyle = style;
+          ctx.lineWidth = Math.max(1, rr / 4);
+          ctx.stroke();
+          return;
+        }
+        ctx.fillStyle = style;
         ctx.fill();
       };
       if (az) {
@@ -9060,6 +9201,7 @@
       ptCy: null,
       ptRad: null,
       ptRGB: null,
+      ptShape: null,
       ptN: 0,
       ptAllRound: false,
       opts: {
@@ -9081,6 +9223,7 @@
       tableEl: null,
       focusables: [],
       focusIdx: -1,
+      focusHold: false,
       vb0: null,
       vb: null,
       azPanels: [],
