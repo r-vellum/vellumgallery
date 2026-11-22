@@ -52,19 +52,8 @@ a <- vplot(top5, width = 7, height = 3.6) |>
 #| echo: false
 dir.create("figs", showWarnings = FALSE)
 anim_save("figs/ranking-enter-exit.svg", a)
-render_plot(
-  vplot(top5[top5$year == 2007, ], width = 7, height = 3.6) |>
-    mark_bar(x = 6 - rank, y = gdpPercap, fill = country) |>
-    mark_text(x = 6 - rank, y = gdpPercap + 600, label = country,
-              hjust = 0, size = 10) |>
-    coord_flip() |>
-    guides(fill = "none") |>
-    scale_y_continuous(limits = c(0, 60000)) |>
-    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
-    labs(title = "Europe's five highest GDPs per capita, 2007",
-         x = NULL, y = "GDP per capita (1990 dollars)"),
-  "figs/ranking-enter-exit-poster.png", dpi = 100
-)
+# The gallery card: the animation's own last frame.
+anim_frame("figs/ranking-enter-exit-poster.png", a, scale = 100 / a@dpi)
 knitr::include_graphics("figs/ranking-enter-exit.svg")
 ```
 

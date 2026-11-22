@@ -34,15 +34,8 @@ range(stocks$date)
 ```
 
 ```{r}
-p <- vplot(stocks, width = 7, height = 3.6)
-# One layer per index. A multi-series line in a single layer currently gets a
-# wrong leading point under transition_reveal(); separate layers avoid it.
-for (ix in unique(stocks$index)) {
-  p <- mark_line(p, x = date, y = close, color = index,
-                 data = stocks[stocks$index == ix, ])
-}
-
-a <- p |>
+a <- vplot(stocks, width = 7, height = 3.6) |>
+  mark_line(x = date, y = close, color = index) |>
   scale_x_date(date_breaks = "1 year", date_labels = "%Y") |>
   labs(title = "European stock indices, {format(frame_along, '%B %Y')}",
        x = NULL, y = "closing price") |>
@@ -54,16 +47,8 @@ a <- p |>
 #| echo: false
 dir.create("figs", showWarnings = FALSE)
 anim_save("figs/reveal-timeseries.svg", a)
-poster <- vplot(stocks, width = 7, height = 3.6)
-for (ix in unique(stocks$index)) {
-  poster <- mark_line(poster, x = date, y = close, color = index,
-                      data = stocks[stocks$index == ix, ])
-}
-poster <- poster |>
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y") |>
-  labs(title = "European stock indices, August 1998",
-       x = NULL, y = "closing price")
-render_plot(poster, "figs/reveal-timeseries-poster.png", dpi = 100)
+# The gallery card: the animation's own last frame.
+anim_frame("figs/reveal-timeseries-poster.png", a, scale = 100 / a@dpi)
 knitr::include_graphics("figs/reveal-timeseries.svg")
 ```
 

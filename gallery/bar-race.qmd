@@ -66,18 +66,8 @@ knitr::include_graphics("figs/bar-race.svg")
 
 ```{r}
 #| include: false
-# A still of the last state, for the listing card.
-last <- d[d$year == 2007, ]
-poster <- vplot(last, width = 7, height = 4.5, dpi = 150) |>
-  mark_bar(x = rank, y = gdp, fill = country) |>
-  mark_text(x = rank, y = gdp + 150, label = country, hjust = 0, size = 10) |>
-  coord_flip() |>
-  guides(fill = "none") |>
-  scale_y_continuous(limits = c(0, 16000)) |>
-  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) |>
-  labs(title = "Total GDP of the ten largest economies of 2007, in 2007",
-       x = NULL, y = "billions of 1990 dollars")
-render_plot(poster, "figs/bar-race-poster.png", dpi = 100)
+# The listing card: the animation's own last frame.
+anim_frame("figs/bar-race-poster.png", a, scale = 100 / a@dpi)
 ```
 
 China starts seventh of the ten and takes second place off Japan in 2002. Japan had

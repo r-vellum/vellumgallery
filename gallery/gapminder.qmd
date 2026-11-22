@@ -45,14 +45,8 @@ anim_save("gapminder.svg", a)
 #| echo: false
 dir.create("figs", showWarnings = FALSE)
 anim_save("figs/gapminder.svg", a)
-# A one-frame still for the gallery card: the last year, on the same encodings.
-poster <- vplot(transform(gapminder[gapminder$year == 2007, ], pop = pop / 1e6),
-                width = 7, height = 4.5) |>
-  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent, alpha = 0.8) |>
-  scale_x_continuous(trans = "log10") |>
-  labs(title = "Year: 2007", x = "GDP per capita",
-       y = "Life expectancy", size = "population (millions)")
-render_plot(poster, "figs/gapminder-poster.png", dpi = 100)
+# The gallery card: the animation's own last frame (same scales and colours).
+anim_frame("figs/gapminder-poster.png", a, scale = 100 / a@dpi)
 knitr::include_graphics("figs/gapminder.svg")
 ```
 

@@ -38,15 +38,8 @@ a <- vplot(g4, width = 7, height = 4.5) |>
 #| echo: false
 dir.create("figs", showWarnings = FALSE)
 anim_save("figs/animated-facets.svg", a)
-poster <- vplot(g4[g4$year == 2007, ], width = 7, height = 4.5) |>
-  mark_point(x = gdpPercap, y = lifeExp, size = pop, color = continent, alpha = 0.7) |>
-  scale_x_continuous(trans = "log10", breaks = c(1e3, 1e4, 1e5),
-                     labels = c("1k", "10k", "100k")) |>
-  facet_wrap(~continent) |>
-  guides(color = "none") |>
-  labs(title = "Year: 2007", x = "GDP per capita",
-       y = "Life expectancy", size = "population (millions)")
-render_plot(poster, "figs/animated-facets-poster.png", dpi = 100)
+# The gallery card: the animation's own last frame.
+anim_frame("figs/animated-facets-poster.png", a, scale = 100 / a@dpi)
 knitr::include_graphics("figs/animated-facets.svg")
 ```
 
