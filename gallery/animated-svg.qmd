@@ -48,18 +48,9 @@ a <- vplot(spend, width = 6.5, height = 3.2) |>
 #| echo: false
 dir.create("figs", showWarnings = FALSE)
 anim_save("figs/animated-svg.svg", a)
-# A one-frame poster for the gallery card: the last year.
-render_plot(
-  vplot(spend[spend$year == "1960", ], width = 6.5, height = 3.2) |>
-    mark_bar(x = category, y = billions, fill = billions) |>
-    coord_flip() |>
-    scale_fill_gradient(low = "#e6d3a8", high = "#7a2e0e",
-                        limits = range(spend$billions)) |>
-    guides(fill = "none") |>
-    labs(title = "US personal expenditure, 1960",
-         x = NULL, y = "billions of dollars"),
-  "figs/animated-svg-poster.png", dpi = 100
-)
+# The gallery card: a frame of the animation itself, during the 1960 hold
+# (the fifth of five 30-frame states, held for its first 10 frames).
+anim_frame("figs/animated-svg-poster.png", a, frame = 125, scale = 100 / a@dpi)
 knitr::include_graphics("figs/animated-svg.svg")
 ```
 

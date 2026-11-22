@@ -63,17 +63,10 @@ cells <- vapply(names(demos), function(nm) {
 cat("\n```{=html}\n", '<style>.easing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.75rem;margin:1rem 0}',
     '.easing-cell svg{width:100%;height:auto;display:block}</style>\n',
     '<div class="easing-grid">\n', paste(cells, collapse = "\n"), "\n</div>\n```\n\n", sep = "")
-render_plot(
-  vplot(track, width = 3.4, height = 1.4) |>
-    mark_point(x = x, y = y, color = v, size = 3) |>
-    scale_x_continuous(limits = c(-1, 11), breaks = c(0, 5, 10)) |>
-    scale_color_gradient(low = "#3a5a80", high = "#c1121f") |>
-    guides(color = "none") |>
-    theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
-          panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank()) |>
-    labs(title = "linear, cubic, back, elastic, bounce", x = NULL, y = NULL),
-  "figs/easing-poster.png", dpi = 120
-)
+# The gallery card: the bounce-out demo mid-flight (frame 20 of 64), so the
+# point is between its two colours as in the animation.
+anim_frame("figs/easing-poster.png", demos$bounce, frame = 20,
+           scale = 120 / demos$bounce@dpi)
 ```
 
 - **linear**: constant speed, an abrupt start and stop.
