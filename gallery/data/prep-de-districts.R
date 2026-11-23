@@ -7,9 +7,11 @@
 #
 #   data/de-districts.geojson    400 German districts (NUTS 3, 2024 boundaries)
 #   data/de-districts.csv        GDP per inhabitant and median age per district
+#   data/europe.geojson          European countries, for the locator inset
 #
 # Sources (both Eurostat, both free to reuse with attribution):
-#   * Boundaries: GISCO, NUTS 2024, 1:10 million, EPSG:4326
+#   * Boundaries: GISCO, NUTS 2024, 1:10 million, EPSG:4326, and GISCO
+#     countries 2024, 1:60 million, cropped to Europe
 #     https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/territorial-units-statistics
 #     (c) EuroGeographics for the administrative boundaries
 #   * GDP per inhabitant, EUR, current prices: table nama_10r_3gdp (unit EUR_HAB)
@@ -57,3 +59,18 @@ dir.create("data", showWarnings = FALSE)
 write.csv(ind, "data/de-districts.csv", row.names = FALSE)
 sf::st_write(geo, "data/de-districts.geojson", delete_dsn = TRUE, quiet = TRUE,
              layer_options = "COORDINATE_PRECISION=4")
+
+# The locator: GISCO countries 2024 at 1:60 million, cropped to Europe.
+cntr <- sf::st_read(
+  "https://gisco-services.ec.europa.eu/distribution/v2/countries/geojson/CNTR_RG_60M_2024_4326.geojson",
+  quiet = TRUE
+)
+sf::sf_use_s2(FALSE)
+europe <- suppressWarnings(sf::st_crop(
+  sf::st_make_valid(cntr[, c("CNTR_ID", "NAME_ENGL")]),
+  sf::st_bbox(c(xmin = -11, ymin = 34, xmax = 32, ymax = 60.5), crs = 4326)
+))
+europe <- europe[!sf::st_is_empty(europe), ]
+names(europe)[1:2] <- c("cntr_id", "name")
+sf::st_write(europe, "data/europe.geojson", delete_dsn = TRUE, quiet = TRUE,
+             layer_options = "COORDINATE_PRECISION=3")

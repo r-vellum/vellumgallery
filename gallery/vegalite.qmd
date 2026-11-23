@@ -65,9 +65,12 @@ Most real specs point at a file: `"data": {"url": "data/penguins.json"}`.
 names of the [vega-datasets](https://github.com/vega/vega-datasets) copy, and
 the spec is a scatter in the style of the Vega-Lite gallery.
 
+The spec's `"scale": {"zero": false}` keeps both axes on the range of the data,
+which is where vellum puts them anyway, and its `tooltip` channel becomes the
+layer's `tooltip`, so hovering a point in the widget below names its island.
 Anything the translation cannot carry over is reported, not dropped in silence.
-This spec asks for a `tooltip` channel, which the bridge does not map yet, and
-the warning says so:
+The `href` channel, a link behind every point, has no vellumplot counterpart,
+and the warning says so:
 
 ```{r}
 #| warning: true
@@ -85,7 +88,8 @@ scatter_spec <- '{
     "y": {"field": "Body Mass (g)", "type": "quantitative", "scale": {"zero": false}},
     "color": {"field": "Species", "type": "nominal"},
     "shape": {"field": "Species", "type": "nominal"},
-    "tooltip": {"field": "Island", "type": "nominal"}
+    "tooltip": {"field": "Island", "type": "nominal"},
+    "href": {"value": "https://allisonhorst.github.io/palmerpenguins/"}
   }
 }'
 
@@ -112,8 +116,9 @@ render_plot(penguins, "figs/vegalite.png", dpi = 150)
 penguins |> as_widget(height = 400)
 ```
 
-Hover a point, click a species in the legend, drag to brush, scroll to zoom. The
-widget hosts the scene vellum solved; no Vega runtime is involved.
+Hover a point for its island, click a species in the legend, drag to brush,
+scroll to zoom. The widget hosts the scene vellum solved; no Vega runtime is
+involved.
 
 ## The round trip
 
@@ -123,6 +128,14 @@ Vega-Lite tool. Inline data comes along as `values`:
 ```{r}
 vl <- spec_to_vegalite(bars)
 str(vl[c("mark", "encoding")], max.level = 3)
+```
+
+The penguins go back out with their tooltip, and with `"zero": false` on both
+axes: vellum frames a scatter on its data, while Vega-Lite starts a
+quantitative axis at zero unless told otherwise, so the export says so.
+
+```{r}
+str(spec_to_vegalite(penguins)$encoding[c("x", "y", "tooltip")])
 ```
 
 The two grammars overlap for the common cases: marks, encodings, scale domains

@@ -114,35 +114,35 @@ xy <- cbind(r * cos(ang), r * sin(ang))
   rows of `vgraph()`'s node table, so the clubs get larger pies.
 - `mark_node_text(repel = TRUE)` nudges every label off its pie and clear of
   its neighbours, with a leader line where it had to move far.
-- The pie colours are named in the subtitle with `md()` colour spans, which do
-  the job of a legend.
+- The pies share one fill scale over the five columns, so `scale_fill_manual()`
+  sets their colours and the legend at the bottom names them.
 
 ```{r}
 pal <- c(fee = "#8c2d19", loan = "#c9822b", loan_return = "#e8c77a",
          free = "#5f7f5a", other = "#b8ad99")
-key <- paste0(
-  "[**fee**]{", pal["fee"], "}, [**loan**]{", pal["loan"], "}, ",
-  "[**loan return**]{#b8963e}, [**free**]{", pal["free"], "}, [**other**]{#8f846f}"
-)
 
-net <- vgraph(g, layout = xy, width = 8, height = 8)
+net <- vgraph(g, layout = xy, width = 8, height = 8.6)
 clubs <- net@data[net@data$kind == "club", ]
 abroad <- net@data[net@data$kind == "abroad", ]
 
 net <- net |>
   mark_edges(color = "#6b4f2c", alpha = 0.3, linewidth = n) |>
   scale_edge_width(range = c(0.3, 2.5)) |>
-  mark_node_pie(cols = types, size = 2.4, fill = unname(pal), data = abroad) |>
-  mark_node_pie(cols = types, size = 4.2, fill = unname(pal), data = clubs) |>
+  mark_node_pie(cols = types, size = 2.4, data = abroad) |>
+  mark_node_pie(cols = types, size = 4.2, data = clubs) |>
+  scale_fill_manual(values = pal, breaks = names(pal),
+                    labels = c("fee", "loan", "loan return", "free", "other")) |>
   mark_node_text(label = name, size = 7, data = abroad, color = "#5a4a32",
                  repel = TRUE, point_padding = 3, seed = 1) |>
   mark_node_text(label = name, size = 8, data = clubs, fontface = "bold",
                  repel = TRUE, point_padding = 4, seed = 1) |>
   labs(
     title = "Who traded with whom: Bundesliga transfers, summer 2025",
-    subtitle = md(paste("Each pie splits a club's or a country's deals by type:", key))
+    subtitle = "Each pie splits a club's or a country's deals by type",
+    fill = NULL
   ) |>
-  theme(legend.position = "none")
+  guides(edge_width = "none") |>
+  theme(legend.position = "bottom")
 ```
 
 ```{r}

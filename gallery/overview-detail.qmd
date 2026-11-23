@@ -46,7 +46,11 @@ brush <- select_interval("window", encodings = "x")
 detail <- vplot(ss, width = 9, height = 3.6) |>
   mark_area(x = date, y = n, fill = "#e3cfa4", alpha = 0.8) |>
   mark_line(x = date, y = smooth, color = "#6b4f2c", linewidth = 0.7) |>
-  labs(x = NULL, y = "sunspots") |>
+  labs(
+    title = "Monthly sunspot number, 1749 to 2024",
+    subtitle = "Brush the strip below to zoom; the line is a 13-month running mean",
+    x = NULL, y = "sunspots"
+  ) |>
   theme_minimal() |>
   bind_scale(brush)
 
@@ -57,15 +61,12 @@ overview <- vplot(ss, width = 9, height = 1.1) |>
   theme(axis.text.y = element_blank(), panel.grid = element_blank()) |>
   add_selection(brush)
 
-sunspots <- concat(detail, overview, ncol = 1, heights = c(3.6, 1.1)) |>
-  compose_annotation(
-    title = "Monthly sunspot number, 1749 to 2024",
-    subtitle = "Brush the strip below to zoom; the line is a 13-month running mean"
-  )
+sunspots <- concat(detail, overview, ncol = 1, heights = c(3.6, 1.1))
 ```
 
 `concat()` stacks the two plots into one figure and lines up their panels, so the
-strip sits exactly under the chart it controls. On a static render the selection
+strip sits exactly under the chart it controls. The title and subtitle belong to
+the detail plot and are drawn above its panel, inside the shared grid. On a static render the selection
 does nothing and you get both views at full range:
 
 ```{r}

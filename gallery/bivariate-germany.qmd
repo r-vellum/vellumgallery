@@ -28,10 +28,11 @@ district level, for 2023:
   [`nama_10r_3gdp`](https://ec.europa.eu/eurostat/databrowser/view/nama_10r_3gdp/default/table)
   (unit `EUR_HAB`).
 
-The boundaries are Eurostat's GISCO NUTS 2024 regions at 1:10 million,
-© EuroGeographics. The script `data/prep-de-districts.R` fetched all three once
-and wrote two small files, a 200 KB GeoJSON and a 17 KB CSV, which are committed
-with the site. Rendering the page downloads nothing.
+The boundaries are Eurostat's GISCO NUTS 2024 regions at 1:10 million, and
+GISCO's 1:60 million country outlines for the locator map, © EuroGeographics.
+The script `data/prep-de-districts.R` fetched them once and wrote three small
+files, two GeoJSON files of 200 KB and 75 KB and a 17 KB CSV, which are
+committed with the site. Rendering the page downloads nothing.
 
 ```{r}
 geo <- sf::st_read("data/de-districts.geojson", quiet = TRUE)
@@ -68,8 +69,7 @@ p <- vplot(de, width = 7, height = 7.5) |>
   scale_fill_bivariate(palette = "Brown") |>
   guides(fill = guide_bivariate(
     xlab = "median age",
-    ylab = "GDP per inhabitant (€1,000)",
-    key.size = 9
+    ylab = "GDP per inhabitant (€1,000)"
   )) |>
   labs(
     title = "Older and poorer, younger and richer",
@@ -77,6 +77,33 @@ p <- vplot(de, width = 7, height = 7.5) |>
     caption = "Data: Eurostat (demo_r_pjanind3, nama_10r_3gdp). Boundaries: GISCO NUTS 2024, © EuroGeographics"
   ) |>
   theme_void()
+```
+
+A small map of Europe in the corner says where Germany is. `inset()` lays it
+over the plot at fractions of its width and height, and
+`vl_shadow()` lifts it off the page with a soft drop shadow. Both maps use
+`coord_sf()`, which keeps their shapes: the inset is fitted inside the box it
+is given, so its frame hugs the map instead of filling the box.
+
+```{r}
+europe <- sf::st_read("data/europe.geojson", quiet = TRUE)
+europe <- sf::st_transform(europe, 3035) # ETRS89 / LAEA Europe
+europe$germany <- europe$cntr_id == "DE"
+
+locator <- vplot(europe) |>
+  mark_sf(fill = germany, color = "#f7f1e3", linewidth = 0.1) |>
+  coord_sf() |>
+  scale_fill_manual(values = c("FALSE" = "#d8ccb4", "TRUE" = "#8a5a2b")) |>
+  guides(fill = "none") |>
+  theme_void() |>
+  theme(
+    panel.background = element_rect(fill = "#f7f1e3", color = "#b9a888", linewidth = 0.3),
+    plot.margin = c(0, 0, 0, 0)
+  )
+
+p <- p |>
+  inset(locator, left = 0.7, bottom = 0.06, right = 0.98, top = 0.32,
+        shadow = vellum::vl_shadow(dx = 1.5, dy = 1.5, blur = 4, col = "#3b2a1640"))
 ```
 
 ```{r}
