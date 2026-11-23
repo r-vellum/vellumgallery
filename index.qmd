@@ -22,6 +22,76 @@ sheet of pixels. The grammar sits on top; the widget reads the same solved scene
 [Browse the gallery](gallery/index.qmd){.btn .btn-primary .btn-lg}
 ::::
 
+## Why vellum
+
+::::::{.why-vellum}
+Six pages that make the case: the grammar you know, data at any size, interaction and animation from the same spec, and figures you can publish.
+
+:::::{.why-grid}
+
+:::{.why-card}
+[![](gallery/figs/from-ggplot2-vellum.png){fig-alt="Penguin scatter plot drawn by vellumplot"}](gallery/from-ggplot2.qmd)
+
+### [From ggplot2, in five edits](gallery/from-ggplot2.qmd)
+
+::: {.why-line}
+If you write ggplot2 you can read vellumplot. Five mechanical edits, then one line for a widget and two for an animation.
+:::
+:::
+
+:::{.why-card}
+[![](gallery/figs/census-thumb.png){fig-alt="Datashaded map of the US population"}](gallery/datashade-census.qmd)
+
+### [306 million points](gallery/datashade-census.qmd)
+
+::: {.why-line}
+Every person in the US Census as a point, datashaded. Big data is binned to the render grid, so nothing is dropped.
+:::
+:::
+
+:::{.why-card}
+[![](gallery/figs/nba-shots-thumb.png){fig-alt="Datashaded basketball half-court of shot locations"}](gallery/nba-shots.qmd)
+
+### [26 seasons of NBA shots](gallery/nba-shots.qmd)
+
+::: {.why-line}
+5.2 million shots, one panel per season: the mid-range empties and the three-point arc lights up.
+:::
+:::
+
+:::{.why-card}
+[![](gallery/figs/overview-detail.png){fig-alt="Sunspot time series with an overview strip"}](gallery/overview-detail.qmd)
+
+### [Interaction is part of the spec](gallery/overview-detail.qmd)
+
+::: {.why-line}
+Brush an overview, zoom the detail. Declared with select_interval() and bind_scale(); it needs no server.
+:::
+:::
+
+:::{.why-card}
+[![](gallery/figs/bivariate-germany.png){fig-alt="Bivariate choropleth of German districts"}](gallery/bivariate-germany.qmd)
+
+### [Real data, real maps](gallery/bivariate-germany.qmd)
+
+::: {.why-line}
+400 German districts by age and income from Eurostat, in one bivariate choropleth.
+:::
+:::
+
+:::{.why-card}
+[![](gallery/figs/bar-race-poster.png){fig-alt="Bar chart race poster frame"}](gallery/bar-race.qmd)
+
+### [Animation with frozen scales](gallery/bar-race.qmd)
+
+::: {.why-line}
+Keyframes are compiled once and tweened, so axes and legends hold still while the data moves.
+:::
+:::
+
+:::::
+::::::
+
 ## The ecosystem
 
 ::::{.eco-grid}

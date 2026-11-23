@@ -1,0 +1,401 @@
+"nuts_id","name","gdp_per_inhabitant","median_age","year"
+"DE111","Stuttgart, Stadtkreis",118100,40.4,2023
+"DE112","Böblingen",86900,44,2023
+"DE113","Esslingen",53000,44.8,2023
+"DE114","Göppingen",37600,45.8,2023
+"DE115","Ludwigsburg",59600,44.4,2023
+"DE116","Rems-Murr-Kreis",40500,45.7,2023
+"DE117","Heilbronn, Stadtkreis",67200,41,2023
+"DE118","Heilbronn, Landkreis",77400,44.4,2023
+"DE119","Hohenlohekreis",65500,44.6,2023
+"DE11A","Schwäbisch Hall",56900,44,2023
+"DE11B","Main-Tauber-Kreis",49600,47.8,2023
+"DE11C","Heidenheim",44000,45.5,2023
+"DE11D","Ostalbkreis",56400,45.2,2023
+"DE121","Baden-Baden, Stadtkreis",70600,50.2,2023
+"DE122","Karlsruhe, Stadtkreis",83300,41.2,2023
+"DE123","Karlsruhe, Landkreis",42900,46.3,2023
+"DE124","Rastatt",50800,47.1,2023
+"DE125","Heidelberg, Stadtkreis",70800,35.6,2023
+"DE126","Mannheim, Stadtkreis",80200,41.1,2023
+"DE127","Neckar-Odenwald-Kreis",37100,47.3,2023
+"DE128","Rhein-Neckar-Kreis",46200,46.4,2023
+"DE129","Pforzheim, Stadtkreis",48400,41.8,2023
+"DE12A","Calw",35700,45.8,2023
+"DE12B","Enzkreis",37900,46.3,2023
+"DE12C","Freudenstadt",46400,45.7,2023
+"DE131","Freiburg im Breisgau, Stadtkreis",63000,37.7,2023
+"DE132","Breisgau-Hochschwarzwald",35400,46.5,2023
+"DE133","Emmendingen",40400,46,2023
+"DE134","Ortenaukreis",47800,45.6,2023
+"DE135","Rottweil",52300,45.8,2023
+"DE136","Schwarzwald-Baar-Kreis",46900,45.5,2023
+"DE137","Tuttlingen",59100,43.5,2023
+"DE138","Konstanz",42800,44.5,2023
+"DE139","Lörrach",38700,45.3,2023
+"DE13A","Waldshut",37000,45.4,2023
+"DE141","Reutlingen",50100,45.1,2023
+"DE142","Tübingen, Landkreis",43100,40.5,2023
+"DE143","Zollernalbkreis",42400,46.7,2023
+"DE144","Ulm, Stadtkreis",100800,40.5,2023
+"DE145","Alb-Donau-Kreis",39100,44,2023
+"DE146","Biberach",63100,43.6,2023
+"DE147","Bodenseekreis",61100,47,2023
+"DE148","Ravensburg",52600,44.4,2023
+"DE149","Sigmaringen",45300,45.5,2023
+"DE211","Ingolstadt, Kreisfreie Stadt",164200,41.2,2023
+"DE212","München, Kreisfreie Stadt",100900,39.8,2023
+"DE213","Rosenheim, Kreisfreie Stadt",61600,42.9,2023
+"DE214","Altötting",61300,46.2,2023
+"DE215","Berchtesgadener Land",43500,46.7,2023
+"DE216","Bad Tölz-Wolfratshausen",36400,46.3,2023
+"DE217","Dachau",37800,44.2,2023
+"DE218","Ebersberg",43700,44.5,2023
+"DE219","Eichstätt",44400,43.1,2023
+"DE21A","Erding",39400,44,2023
+"DE21B","Freising",61000,42,2023
+"DE21C","Fürstenfeldbruck",34900,45.6,2023
+"DE21D","Garmisch-Partenkirchen",40000,49.1,2023
+"DE21E","Landsberg am Lech",45200,46.5,2023
+"DE21F","Miesbach",50300,47.7,2023
+"DE21G","Mühldorf a. Inn",42400,44.9,2023
+"DE21H","München, Landkreis",149200,44.7,2023
+"DE21I","Neuburg-Schrobenhausen",43700,44.4,2023
+"DE21J","Pfaffenhofen a. d. Ilm",54400,43.7,2023
+"DE21K","Rosenheim, Landkreis",42300,46.7,2023
+"DE21L","Starnberg",54200,48.2,2023
+"DE21M","Traunstein",54700,47.5,2023
+"DE21N","Weilheim-Schongau",49300,46.5,2023
+"DE221","Landshut, Kreisfreie Stadt",72800,43.4,2023
+"DE222","Passau, Kreisfreie Stadt",80400,42.5,2023
+"DE223","Straubing, Kreisfreie Stadt",68400,45.1,2023
+"DE224","Deggendorf",52900,45.7,2023
+"DE225","Freyung-Grafenau",40500,49,2023
+"DE226","Kelheim",41600,44.3,2023
+"DE227","Landshut, Landkreis",47600,44.9,2023
+"DE228","Passau, Landkreis",38800,48.1,2023
+"DE229","Regen",42000,48.4,2023
+"DE22A","Rottal-Inn",44700,46.7,2023
+"DE22B","Straubing-Bogen",36400,46,2023
+"DE22C","Dingolfing-Landau",75300,44.5,2023
+"DE231","Amberg, Kreisfreie Stadt",78800,47,2023
+"DE232","Regensburg, Kreisfreie Stadt",109700,39.1,2023
+"DE233","Weiden i. d. Opf, Kreisfreie Stadt",69000,46.6,2023
+"DE234","Amberg-Sulzbach",34900,47.8,2023
+"DE235","Cham",49800,47.4,2023
+"DE236","Neumarkt i. d. OPf.",47700,45.2,2023
+"DE237","Neustadt a. d. Waldnaab",41700,47.6,2023
+"DE238","Regensburg, Landkreis",33700,46.1,2023
+"DE239","Schwandorf",46700,46.1,2023
+"DE23A","Tirschenreuth",52200,48.9,2023
+"DE241","Bamberg, Kreisfreie Stadt",78300,41.3,2023
+"DE242","Bayreuth, Kreisfreie Stadt",79200,42.5,2023
+"DE243","Coburg, Kreisfreie Stadt",122400,46,2023
+"DE244","Hof, Kreisfreie Stadt",52700,45.8,2023
+"DE245","Bamberg, Landkreis",31500,46.3,2023
+"DE246","Bayreuth, Landkreis",28800,49.1,2023
+"DE247","Coburg, Landkreis",34100,49.6,2023
+"DE248","Forchheim",40100,47,2023
+"DE249","Hof, Landkreis",45600,51.2,2023
+"DE24A","Kronach",42000,51.2,2023
+"DE24B","Kulmbach",46000,50.6,2023
+"DE24C","Lichtenfels",41100,48.8,2023
+"DE24D","Wunsiedel i. Fichtelgebirge",46400,51.3,2023
+"DE251","Ansbach, Kreisfreie Stadt",77900,45.1,2023
+"DE252","Erlangen, Kreisfreie Stadt",118700,39.5,2023
+"DE253","Fürth, Kreisfreie Stadt",47300,43.5,2023
+"DE254","Nürnberg, Kreisfreie Stadt",73600,42.8,2023
+"DE255","Schwabach, Kreisfreie Stadt",45200,47,2023
+"DE256","Ansbach, Landkreis",37900,45.6,2023
+"DE257","Erlangen-Höchstadt",44500,45.9,2023
+"DE258","Fürth, Landkreis",27400,47.7,2023
+"DE259","Nürnberger Land",39600,47.8,2023
+"DE25A","Neustadt a. d. Aisch-Bad Windsheim",38700,46.9,2023
+"DE25B","Roth",39100,47.2,2023
+"DE25C","Weißenburg-Gunzenhausen",39600,46.8,2023
+"DE261","Aschaffenburg, Kreisfreie Stadt",85200,44.7,2023
+"DE262","Schweinfurt, Kreisfreie Stadt",115000,44.9,2023
+"DE263","Würzburg, Kreisfreie Stadt",76600,39.5,2023
+"DE264","Aschaffenburg, Landkreis",45100,48,2023
+"DE265","Bad Kissingen",41200,50.2,2023
+"DE266","Rhön-Grabfeld",51300,48.2,2023
+"DE267","Haßberge",39600,47.8,2023
+"DE268","Kitzingen",48500,46.3,2023
+"DE269","Miltenberg",44900,47.7,2023
+"DE26A","Main-Spessart",46500,49.5,2023
+"DE26B","Schweinfurt, Landkreis",28200,47.3,2023
+"DE26C","Würzburg, Landkreis",35700,47,2023
+"DE271","Augsburg, Kreisfreie Stadt",56100,41.4,2023
+"DE272","Kaufbeuren, Kreisfreie Stadt",45000,45.1,2023
+"DE273","Kempten (Allgäu), Kreisfreie Stadt",67400,43.8,2023
+"DE274","Memmingen, Kreisfreie Stadt",72500,44.6,2023
+"DE275","Aichach-Friedberg",35500,45.5,2023
+"DE276","Augsburg, Landkreis",37000,45.4,2023
+"DE277","Dillingen a.d. Donau",43600,45.6,2023
+"DE278","Günzburg",51400,44.8,2023
+"DE279","Neu-Ulm",42900,44,2023
+"DE27A","Lindau (Bodensee)",47400,47.5,2023
+"DE27B","Ostallgäu",47600,46,2023
+"DE27C","Unterallgäu",50600,45.6,2023
+"DE27D","Donau-Ries",59500,45.4,2023
+"DE27E","Oberallgäu",42900,47.8,2023
+"DE300","Berlin",54700,41.5,2023
+"DE401","Brandenburg an der Havel, Kreisfreie Stadt",40000,50,2023
+"DE402","Cottbus, Kreisfreie Stadt",46900,49.4,2023
+"DE403","Frankfurt (Oder), Kreisfreie Stadt",46300,50.7,2023
+"DE404","Potsdam, Kreisfreie Stadt",52000,42.5,2023
+"DE405","Barnim",27200,49.6,2023
+"DE406","Dahme-Spreewald",47800,49.1,2023
+"DE407","Elbe-Elster",32900,54,2023
+"DE408","Havelland",25700,49.1,2023
+"DE409","Märkisch-Oderland",27500,50.7,2023
+"DE40A","Oberhavel",31200,49.8,2023
+"DE40B","Oberspreewald-Lausitz",35100,53.5,2023
+"DE40C","Oder-Spree",41500,51.9,2023
+"DE40D","Ostprignitz-Ruppin",33400,52.3,2023
+"DE40E","Potsdam-Mittelmark",33000,50.1,2023
+"DE40F","Prignitz",36000,53.8,2023
+"DE40G","Spree-Neiße",51300,54.8,2023
+"DE40H","Teltow-Fläming",43300,47.8,2023
+"DE40I","Uckermark",38800,54.3,2023
+"DE501","Bremen, Kreisfreie Stadt",61100,42.6,2023
+"DE502","Bremerhaven, Kreisfreie Stadt",42800,43.2,2023
+"DE600","Hamburg",84200,41.1,2023
+"DE711","Darmstadt, Kreisfreie Stadt",94200,38.3,2023
+"DE712","Frankfurt am Main, Kreisfreie Stadt",120900,39.7,2023
+"DE713","Offenbach am Main, Kreisfreie Stadt",50600,40.1,2023
+"DE714","Wiesbaden, Kreisfreie Stadt",73700,43.1,2023
+"DE715","Bergstraße",35600,47.6,2023
+"DE716","Darmstadt-Dieburg",33600,46.3,2023
+"DE717","Groß-Gerau",55800,43.7,2023
+"DE718","Hochtaunuskreis",72800,47.8,2023
+"DE719","Main-Kinzig-Kreis",40300,46.4,2023
+"DE71A","Main-Taunus-Kreis",72800,46,2023
+"DE71B","Odenwaldkreis",32200,49.2,2023
+"DE71C","Offenbach, Landkreis",48400,45.2,2023
+"DE71D","Rheingau-Taunus-Kreis",29500,49,2023
+"DE71E","Wetteraukreis",36500,46.5,2023
+"DE721","Gießen, Landkreis",45600,42.1,2023
+"DE722","Lahn-Dill-Kreis",43100,46.9,2023
+"DE723","Limburg-Weilburg",37100,47.1,2023
+"DE724","Marburg-Biedenkopf",49100,43.5,2023
+"DE725","Vogelsbergkreis",35500,50.5,2023
+"DE731","Kassel, Kreisfreie Stadt",67400,41.4,2023
+"DE732","Fulda",47600,45.6,2023
+"DE733","Hersfeld-Rotenburg",44200,49.2,2023
+"DE734","Kassel, Landkreis",39300,50.1,2023
+"DE735","Schwalm-Eder-Kreis",39500,48.8,2023
+"DE736","Waldeck-Frankenberg",47600,48.8,2023
+"DE737","Werra-Meißner-Kreis",36200,50.9,2023
+"DE803","Rostock, Kreisfreie Stadt",50600,45.1,2023
+"DE804","Schwerin, Kreisfreie Stadt",50500,48.1,2023
+"DE80J","Mecklenburgische Seenplatte",37800,53.1,2023
+"DE80K","Landkreis Rostock",33400,51.2,2023
+"DE80L","Vorpommern-Rügen",34400,53.1,2023
+"DE80M","Nordwestmecklenburg",31900,50.4,2023
+"DE80N","Vorpommern-Greifswald",34900,51.5,2023
+"DE80O","Ludwigslust-Parchim",32200,51.6,2023
+"DE911","Braunschweig, Kreisfreie Stadt",85500,43.1,2023
+"DE912","Salzgitter, Kreisfreie Stadt",56000,45.1,2023
+"DE913","Wolfsburg, Kreisfreie Stadt",185100,44.2,2023
+"DE914","Gifhorn",28000,46.4,2023
+"DE916","Goslar",36600,51.8,2023
+"DE917","Helmstedt",27700,48.7,2023
+"DE918","Northeim",35200,50.9,2023
+"DE91A","Peine",26600,46.6,2023
+"DE91B","Wolfenbüttel",26300,49.8,2023
+"DE91C","Göttingen",43400,46.6,2023
+"DE922","Diepholz",39200,48.1,2023
+"DE923","Hameln-Pyrmont",39200,49.9,2023
+"DE925","Hildesheim",36500,48,2023
+"DE926","Holzminden",42300,50.8,2023
+"DE927","Nienburg (Weser)",38400,47.9,2023
+"DE928","Schaumburg",31600,50.1,2023
+"DE929","Region Hannover",57800,44.7,2023
+"DE931","Celle",40000,47.6,2023
+"DE932","Cuxhaven",31900,50.4,2023
+"DE933","Harburg",30300,47.6,2023
+"DE934","Lüchow-Dannenberg",34300,52.8,2023
+"DE935","Lüneburg, Landkreis",38100,45.7,2023
+"DE936","Osterholz",27400,49.4,2023
+"DE937","Rotenburg (Wümme)",42900,47.1,2023
+"DE938","Heidekreis",42400,47.2,2023
+"DE939","Stade",38600,46.1,2023
+"DE93A","Uelzen",37800,50.7,2023
+"DE93B","Verden",38700,46.9,2023
+"DE941","Delmenhorst, Kreisfreie Stadt",28500,45.4,2023
+"DE942","Emden, Kreisfreie Stadt",82700,44.7,2023
+"DE943","Oldenburg (Oldenburg), Kreisfreie Stadt",56700,42.1,2023
+"DE944","Osnabrück, Kreisfreie Stadt",61800,40.3,2023
+"DE945","Wilhelmshaven, Kreisfreie Stadt",48800,48.1,2023
+"DE946","Ammerland",41500,48.3,2023
+"DE947","Aurich",34900,49.3,2023
+"DE948","Cloppenburg",47100,41.2,2023
+"DE949","Emsland",54300,44.1,2023
+"DE94A","Friesland (DE)",33300,51.1,2023
+"DE94B","Grafschaft Bentheim",41700,45.6,2023
+"DE94C","Leer",34800,46.5,2023
+"DE94D","Oldenburg, Landkreis",35100,47.9,2023
+"DE94E","Osnabrück, Landkreis",40100,46.4,2023
+"DE94F","Vechta",59000,41.6,2023
+"DE94G","Wesermarsch",43100,49.3,2023
+"DE94H","Wittmund",35400,50.5,2023
+"DEA11","Düsseldorf, Kreisfreie Stadt",104100,42.2,2023
+"DEA12","Duisburg, Kreisfreie Stadt",40300,43.5,2023
+"DEA13","Essen, Kreisfreie Stadt",54600,44.1,2023
+"DEA14","Krefeld, Kreisfreie Stadt",48100,45.9,2023
+"DEA15","Mönchengladbach, Kreisfreie Stadt",41000,44.5,2023
+"DEA16","Mülheim an der Ruhr, Kreisfreie Stadt",46400,47.2,2023
+"DEA17","Oberhausen, Kreisfreie Stadt",35000,46,2023
+"DEA18","Remscheid, Kreisfreie Stadt",43000,46,2023
+"DEA19","Solingen, Kreisfreie Stadt",33500,46.2,2023
+"DEA1A","Wuppertal, Kreisfreie Stadt",40600,43.6,2023
+"DEA1B","Kleve",37600,46,2023
+"DEA1C","Mettmann",55600,48.6,2023
+"DEA1D","Rhein-Kreis Neuss",47000,47,2023
+"DEA1E","Viersen",35300,49,2023
+"DEA1F","Wesel",35100,49.2,2023
+"DEA22","Bonn, Kreisfreie Stadt",88500,41,2023
+"DEA23","Köln, Kreisfreie Stadt",78500,41.4,2023
+"DEA24","Leverkusen, Kreisfreie Stadt",55000,45.3,2023
+"DEA26","Düren",35300,46,2023
+"DEA27","Rhein-Erft-Kreis",42500,46,2023
+"DEA28","Euskirchen",33800,47.6,2023
+"DEA29","Heinsberg",32000,46.8,2023
+"DEA2A","Oberbergischer Kreis",42800,46.4,2023
+"DEA2B","Rheinisch-Bergischer Kreis",32300,49,2023
+"DEA2C","Rhein-Sieg-Kreis",34000,47,2023
+"DEA2D","Städteregion Aachen",44900,42.6,2023
+"DEA31","Bottrop, Kreisfreie Stadt",29100,47.7,2023
+"DEA32","Gelsenkirchen, Kreisfreie Stadt",38600,43.3,2023
+"DEA33","Münster, Kreisfreie Stadt",71200,39.1,2023
+"DEA34","Borken",47200,44.7,2023
+"DEA35","Coesfeld",36600,47.3,2023
+"DEA36","Recklinghausen",30600,47.6,2023
+"DEA37","Steinfurt",41100,45.7,2023
+"DEA38","Warendorf",39600,46.6,2023
+"DEA41","Bielefeld, Kreisfreie Stadt",54500,42.3,2023
+"DEA42","Gütersloh",59200,45.2,2023
+"DEA43","Herford",39900,46.8,2023
+"DEA44","Höxter",33800,48.7,2023
+"DEA45","Lippe",37000,46.8,2023
+"DEA46","Minden-Lübbecke",46300,46.3,2023
+"DEA47","Paderborn",44900,42.9,2023
+"DEA51","Bochum, Kreisfreie Stadt",44800,44.5,2023
+"DEA52","Dortmund, Kreisfreie Stadt",49300,43.1,2023
+"DEA53","Hagen, Kreisfreie Stadt",39500,44.6,2023
+"DEA54","Hamm, Kreisfreie Stadt",36800,44.5,2023
+"DEA55","Herne, Kreisfreie Stadt",33500,45.5,2023
+"DEA56","Ennepe-Ruhr-Kreis",36000,49.1,2023
+"DEA57","Hochsauerlandkreis",44900,48.2,2023
+"DEA58","Märkischer Kreis",42000,47.5,2023
+"DEA59","Olpe",55800,46.4,2023
+"DEA5A","Siegen-Wittgenstein",46000,45.6,2023
+"DEA5B","Soest",44800,47.2,2023
+"DEA5C","Unna",37000,47.9,2023
+"DEB11","Koblenz, Kreisfreie Stadt",90400,42.5,2023
+"DEB12","Ahrweiler",33700,49.8,2023
+"DEB13","Altenkirchen (Westerwald)",32700,47.3,2023
+"DEB14","Bad Kreuznach",36400,48.2,2023
+"DEB15","Birkenfeld",35100,48.9,2023
+"DEB17","Mayen-Koblenz",38500,47.1,2023
+"DEB18","Neuwied",40500,47.1,2023
+"DEB1A","Rhein-Lahn-Kreis",32600,48.5,2023
+"DEB1B","Westerwaldkreis",43500,47,2023
+"DEB1C","Cochem-Zell",40300,50.4,2023
+"DEB1D","Rhein-Hunsrück-Kreis",44100,48.4,2023
+"DEB21","Trier, Kreisfreie Stadt",57000,40.7,2023
+"DEB22","Bernkastel-Wittlich",40000,48.4,2023
+"DEB23","Eifelkreis Bitburg-Prüm",36900,45.9,2023
+"DEB24","Vulkaneifel",41700,50.2,2023
+"DEB25","Trier-Saarburg",24800,46.5,2023
+"DEB31","Frankenthal (Pfalz), Kreisfreie Stadt",45800,45.7,2023
+"DEB32","Kaiserslautern, Kreisfreie Stadt",60200,42.4,2023
+"DEB33","Landau in der Pfalz, Kreisfreie Stadt",54700,42.6,2023
+"DEB34","Ludwigshafen am Rhein, Kreisfreie Stadt",80500,42,2023
+"DEB35","Mainz, Kreisfreie Stadt",88400,38.7,2023
+"DEB36","Neustadt an der Weinstraße, Kreisfreie Stadt",38500,49.1,2023
+"DEB37","Pirmasens, Kreisfreie Stadt",47400,48.6,2023
+"DEB38","Speyer, Kreisfreie Stadt",66300,47.4,2023
+"DEB39","Worms, Kreisfreie Stadt",44200,43.8,2023
+"DEB3A","Zweibrücken, Kreisfreie Stadt",65200,47.2,2023
+"DEB3B","Alzey-Worms",32000,46.7,2023
+"DEB3C","Bad Dürkheim",27000,50.6,2023
+"DEB3D","Donnersbergkreis",33200,48.6,2023
+"DEB3E","Germersheim",44000,45.8,2023
+"DEB3F","Kaiserslautern, Landkreis",27300,47.4,2023
+"DEB3G","Kusel",22700,50,2023
+"DEB3H","Südliche Weinstraße",32400,49.6,2023
+"DEB3I","Rhein-Pfalz-Kreis",23700,48,2023
+"DEB3J","Mainz-Bingen",49900,47.5,2023
+"DEB3K","Südwestpfalz",20800,52,2023
+"DEC01","Regionalverband Saarbrücken",51600,46.2,2023
+"DEC02","Merzig-Wadern",31000,48.6,2023
+"DEC03","Neunkirchen",29700,49.6,2023
+"DEC04","Saarlouis",38300,49.2,2023
+"DEC05","Saarpfalz-Kreis",47400,50.4,2023
+"DEC06","St. Wendel",35600,51.4,2023
+"DED21","Dresden, Kreisfreie Stadt",51300,41.8,2023
+"DED2C","Bautzen",34600,52,2023
+"DED2D","Görlitz",37100,53.6,2023
+"DED2E","Meißen",34100,51.8,2023
+"DED2F","Sächsische Schweiz-Osterzgebirge",28500,50.8,2023
+"DED41","Chemnitz, Kreisfreie Stadt",44200,47.7,2023
+"DED42","Erzgebirgskreis",29600,52.9,2023
+"DED43","Mittelsachsen",33700,52,2023
+"DED44","Vogtlandkreis",31700,53.4,2023
+"DED45","Zwickau",39300,52.4,2023
+"DED51","Leipzig, Kreisfreie Stadt",48200,39.6,2023
+"DED52","Leipzig",32600,51.2,2023
+"DED53","Nordsachsen",37300,50.8,2023
+"DEE01","Dessau-Roßlau, Kreisfreie Stadt",38700,54.6,2023
+"DEE02","Halle (Saale), Kreisfreie Stadt",40300,43.9,2023
+"DEE03","Magdeburg, Kreisfreie Stadt",42700,44.4,2023
+"DEE04","Altmarkkreis Salzwedel",32000,52,2023
+"DEE05","Anhalt-Bitterfeld",38700,53,2023
+"DEE06","Jerichower Land",32500,52.5,2023
+"DEE07","Börde",36500,51,2023
+"DEE08","Burgenlandkreis",34200,53,2023
+"DEE09","Harz",30800,53.4,2023
+"DEE0A","Mansfeld-Südharz",28600,54.9,2023
+"DEE0B","Saalekreis",43800,51.3,2023
+"DEE0C","Salzlandkreis",34400,53.1,2023
+"DEE0D","Stendal",37000,52.7,2023
+"DEE0E","Wittenberg",31200,53.9,2023
+"DEF01","Flensburg, Kreisfreie Stadt",51400,41,2023
+"DEF02","Kiel, Kreisfreie Stadt",58400,40.2,2023
+"DEF03","Lübeck, Kreisfreie Stadt",57900,46.1,2023
+"DEF04","Neumünster, Kreisfreie Stadt",56400,46.6,2023
+"DEF05","Dithmarschen",45700,50.3,2023
+"DEF06","Herzogtum Lauenburg",28400,47.4,2023
+"DEF07","Nordfriesland",46100,49.9,2023
+"DEF08","Ostholstein",35300,52.7,2023
+"DEF09","Pinneberg",34900,47.1,2023
+"DEF0A","Plön",26200,51.5,2023
+"DEF0B","Rendsburg-Eckernförde",37600,49.2,2023
+"DEF0C","Schleswig-Flensburg",36200,49.4,2023
+"DEF0D","Segeberg",39700,46.9,2023
+"DEF0E","Steinburg",36200,49.4,2023
+"DEF0F","Stormarn",42500,48.2,2023
+"DEG01","Erfurt, Kreisfreie Stadt",49500,44.2,2023
+"DEG02","Gera, Kreisfreie Stadt",36500,51.5,2023
+"DEG03","Jena, Kreisfreie Stadt",58200,41,2023
+"DEG05","Weimar, Kreisfreie Stadt",37200,45,2023
+"DEG06","Eichsfeld",32000,49,2023
+"DEG07","Nordhausen",32300,51.5,2023
+"DEG09","Unstrut-Hainich-Kreis",32300,50.8,2023
+"DEG0A","Kyffhäuserkreis",28700,53,2023
+"DEG0C","Gotha",34300,50.3,2023
+"DEG0D","Sömmerda",32900,50.9,2023
+"DEG0E","Hildburghausen",27700,51.4,2023
+"DEG0G","Weimarer Land",37800,49.7,2023
+"DEG0J","Saale-Holzland-Kreis",31000,51.6,2023
+"DEG0K","Saale-Orla-Kreis",36200,52.6,2023
+"DEG0L","Greiz",28700,54.7,2023
+"DEG0M","Altenburger Land",27800,54.4,2023
+"DEG0Q","Schmalkalden-Meiningen",33700,52,2023
+"DEG0R","Wartburgkreis",38100,51.4,2023
+"DEG0S","Suhl, Kreisfreie Stadt",36600,54.9,2023
+"DEG0T","Ilm-Kreis",36900,50.1,2023
+"DEG0U","Saalfeld-Rudolstadt",32700,53.8,2023
+"DEG0V","Sonneberg",30600,52.8,2023

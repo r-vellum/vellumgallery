@@ -1,7 +1,7 @@
 ---
 title: "Twenty-six seasons of NBA shots"
 description: "5.2 million field-goal attempts, 2000–01 to 2025–26, datashaded one facet per season. The mid-range empties out and the three-point arc lights up."
-categories: [Big data, Heatmaps]
+categories: [Stories, Big data, Heatmaps]
 image: figs/nba-shots-thumb.png
 ---
 

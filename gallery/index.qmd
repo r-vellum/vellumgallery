@@ -3,7 +3,16 @@ title: "Gallery"
 description: "Plots and interactive widgets built with the vellum ecosystem. Every example is real, runnable code."
 listing:
   id: gallery-listing
-  contents: "*.qmd"
+  # Stories first (real data, start to finish), then everything else.
+  contents:
+    - nba-shots.qmd
+    - datashade-census.qmd
+    - bundesliga-network.qmd
+    - bivariate-germany.qmd
+    - overview-detail.qmd
+    - germany.qmd
+    - berlin-buildings.qmd
+    - "*.qmd"
   exclude:
     filename: "index.qmd"
   type: grid
@@ -20,6 +29,14 @@ Each card is a self-contained example. Click through for the code and the
 rendered result. Everything is drawn by [vellumplot](https://r-vellum.github.io/vellumplot/)
 on the [vellum](https://r-vellum.github.io/vellum/) engine, which solves the
 whole figure before it draws any of it.
+
+::: {.stories-intro}
+**Stories** come first: pieces that start from a real dataset and end with
+something learned from it, from 26 seasons of NBA shots and 306 million census
+points to a summer of Bundesliga transfers and Germany's districts by age and
+income. [Show only the stories](#category=Stories). The rest of the gallery is
+organised by technique; pick a category on the right to filter.
+:::
 
 :::{#gallery-listing}
 :::

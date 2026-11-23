@@ -1,0 +1,182 @@
+---
+title: "A network you can explore: Bundesliga transfers"
+description: "Every transfer in and out of the 18 Bundesliga clubs in summer 2025 as one network. Pie glyphs split each club's deals into fees, loans, loan returns and free transfers; hover a club to light up its neighbourhood."
+categories: [Stories, Networks, Interactive]
+image: figs/bundesliga-network.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+library(igraph)
+```
+
+A transfer window is a network. Players move from club to club, and the 18
+Bundesliga clubs trade with each other, with the lower German leagues, and with
+clubs across Europe and beyond. This page draws the summer 2025 window that way,
+with one extra question on every node: how did those players move? For cash, on
+loan, back from a loan, or on a free?
+
+The data was scraped from
+[transfermarkt.com](https://www.transfermarkt.com/bundesliga/transfers/wettbewerb/L1/saison_id/2025)'s
+Bundesliga transfer page for the 2025/26 season: 645 arrivals and departures,
+each with player, origin, destination and fee. Clubs outside the Bundesliga are
+already collapsed to their country, so "England" stands for every English club
+and "Germany" for the German clubs below the top flight. The file is committed
+as `data/bundesliga-transfers-2025.csv`.
+
+```{r}
+tr <- read.csv("data/bundesliga-transfers-2025.csv")
+# Retirements and players leaving for no club are not moves between two clubs.
+tr <- tr[!tr$from %in% c("Retired", "Without Club") &
+         !tr$to %in% c("Retired", "Without Club"), ]
+
+# Five kinds of deal, read off the fee column.
+tr$type <- ifelse(grepl("^End of loan", tr$fee), "loan_return",
+           ifelse(grepl("loan", tr$fee, ignore.case = TRUE), "loan",
+           ifelse(grepl("^free", tr$fee), "free",
+           ifelse(grepl("€", tr$fee), "fee", "other"))))
+table(tr$type)
+```
+
+"Other" is a fee column of `-` or `?`: mostly youth players promoted from a
+club's own academy and deals whose terms were not published.
+
+```{r}
+short <- c(
+  "1.FC Heidenheim 1846" = "Heidenheim", "1.FC Köln" = "Köln",
+  "1.FC Union Berlin" = "Union Berlin", "1.FSV Mainz 05" = "Mainz",
+  "Bayer 04 Leverkusen" = "Leverkusen", "Bayern Munich" = "Bayern",
+  "Borussia Dortmund" = "Dortmund", "Borussia Mönchengladbach" = "Gladbach",
+  "Eintracht Frankfurt" = "Frankfurt", "FC Augsburg" = "Augsburg",
+  "FC St. Pauli" = "St. Pauli", "Hamburger SV" = "Hamburg",
+  "RB Leipzig" = "Leipzig", "SC Freiburg" = "Freiburg",
+  "SV Werder Bremen" = "Bremen", "TSG 1899 Hoffenheim" = "Hoffenheim",
+  "VfB Stuttgart" = "Stuttgart", "VfL Wolfsburg" = "Wolfsburg"
+)
+rename <- function(x) ifelse(x %in% names(short), short[x], x)
+tr$from <- rename(tr$from)
+tr$to <- rename(tr$to)
+
+# Nodes: each club or country, with its deals counted by type (both directions).
+types <- c("fee", "loan", "loan_return", "free", "other")
+ends <- rbind(data.frame(name = tr$from, type = tr$type),
+              data.frame(name = tr$to, type = tr$type))
+counts <- as.data.frame.matrix(table(ends$name, factor(ends$type, levels = types)))
+nodes <- data.frame(name = rownames(counts), counts, row.names = NULL)
+nodes$kind <- ifelse(nodes$name %in% short, "club", "abroad")
+
+# Edges: one per pair of clubs that traded, weighted by the number of players.
+edges <- aggregate(list(n = rep(1, nrow(tr))), tr[c("from", "to")], sum)
+g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+c(nodes = vcount(g), edges = ecount(g))
+```
+
+## The layout
+
+A force layout of this graph is a hairball: every club trades with Germany and
+England, so they get pulled to the middle and everything piles up around them.
+A layout with two rings reads better. The 18 clubs go on an inner circle, in the
+order a Kamada–Kawai layout of the club-to-club deals puts them, so clubs that
+trade with each other sit side by side. Every country goes on an outer ring at
+the average angle of the clubs it dealt with. `vgraph()` takes the resulting
+coordinate matrix as its `layout`.
+
+```{r}
+und <- as_undirected(g, mode = "collapse")
+club <- V(g)$kind == "club"
+
+kk <- layout_with_kk(induced_subgraph(und, which(club)))
+ang <- numeric(vcount(g))
+ang[which(club)[order(atan2(kk[, 2] - mean(kk[, 2]), kk[, 1] - mean(kk[, 1])))]] <-
+  seq(0, 2 * pi, length.out = sum(club) + 1)[-1]
+
+for (v in which(!club)) {
+  nb <- intersect(as.integer(neighbors(und, v)), which(club))
+  ang[v] <- atan2(mean(sin(ang[nb])), mean(cos(ang[nb])))
+}
+# then spread the outer ring evenly, keeping that order
+out <- which(!club)
+out <- out[order(ang[out])]
+ang[out] <- seq(0, 2 * pi, length.out = length(out) + 1)[-1] + ang[out[1]]
+
+r <- ifelse(club, 1, 1.9)
+xy <- cbind(r * cos(ang), r * sin(ang))
+```
+
+## What is drawn
+
+- `mark_edges()` draws one line per trading pair, `linewidth = n` maps the
+  number of players onto `scale_edge_width()`.
+- `mark_node_pie()` replaces each node with a pie whose wedges come from the
+  five count columns. It is drawn twice, from the club rows and from the country
+  rows of `vgraph()`'s node table, so the clubs get larger pies.
+- `mark_node_text(repel = TRUE)` nudges every label off its pie and clear of
+  its neighbours, with a leader line where it had to move far.
+- The pie colours are named in the subtitle with `md()` colour spans, which do
+  the job of a legend.
+
+```{r}
+pal <- c(fee = "#8c2d19", loan = "#c9822b", loan_return = "#e8c77a",
+         free = "#5f7f5a", other = "#b8ad99")
+key <- paste0(
+  "[**fee**]{", pal["fee"], "}, [**loan**]{", pal["loan"], "}, ",
+  "[**loan return**]{#b8963e}, [**free**]{", pal["free"], "}, [**other**]{#8f846f}"
+)
+
+net <- vgraph(g, layout = xy, width = 8, height = 8)
+clubs <- net@data[net@data$kind == "club", ]
+abroad <- net@data[net@data$kind == "abroad", ]
+
+net <- net |>
+  mark_edges(color = "#6b4f2c", alpha = 0.3, linewidth = n) |>
+  scale_edge_width(range = c(0.3, 2.5)) |>
+  mark_node_pie(cols = types, size = 2.4, fill = unname(pal), data = abroad) |>
+  mark_node_pie(cols = types, size = 4.2, fill = unname(pal), data = clubs) |>
+  mark_node_text(label = name, size = 7, data = abroad, color = "#5a4a32",
+                 repel = TRUE, point_padding = 3, seed = 1) |>
+  mark_node_text(label = name, size = 8, data = clubs, fontface = "bold",
+                 repel = TRUE, point_padding = 4, seed = 1) |>
+  labs(
+    title = "Who traded with whom: Bundesliga transfers, summer 2025",
+    subtitle = md(paste("Each pie splits a club's or a country's deals by type:", key))
+  ) |>
+  theme(legend.position = "none")
+```
+
+```{r}
+#| echo: false
+#| fig-alt: "Network of Bundesliga transfers in summer 2025: 18 clubs on an inner ring and 35 countries on an outer ring, each drawn as a pie of transfer types, with lines between clubs that traded players and thicker lines for more players"
+vg(net, "bundesliga-network", dpi = 130)
+```
+
+The thick bundle of lines on one side is Germany. The lower leagues are the
+biggest trading partner by far, in 202 of the deals, mostly loans out, loan
+returns in, and academy players moving up. England (78) and France (52) come
+next. The club pies are not alike. Frankfurt, Leverkusen, Stuttgart and
+Dortmund did close to half their business for a fee. At Heidenheim, Bayern and
+Mainz, about 60% of the deals are loans and loan returns, so their pies are
+mostly orange and yellow. Bremen paid or received a fee in 3 of its 33 deals.
+On the outer ring, many countries are a single player and a single colour.
+
+## Explore it
+
+`select_neighbours()` adds the interaction. Hover a node and the widget lights
+up the node, its edges and the clubs or countries at their other ends, and dims
+everything else. Hover an edge for the pair it joins. The selection is part of
+the spec, so it works on the static page with no server.
+
+```{r}
+#| column: page-inset-right
+net |>
+  select_neighbours(on = "hover") |>
+  as_widget()
+```
+
+Try Hamburg, back in the Bundesliga: it dealt with 24 different clubs and
+countries, more than anyone else. Then try Heidenheim, with 8.
+
+The edge routing is plain straight lines. `mark_edge_bundle()` can bundle them
+(see [edge bundling](network-bundle.qmd)), but on two rings force bundling bends
+edges into loops around the nodes, and the straight version is easier to read.

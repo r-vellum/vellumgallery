@@ -1,0 +1,135 @@
+---
+title: "One model, four diagnostic views"
+description: "A power law for diamond prices checked from four sides in one figure: filled 2-D densities with quantile regression lines, a Q–Q plot of the residuals, and residual ECDFs by cut."
+categories: [Statistical, Composition]
+image: figs/model-diagnostics.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+A regression line is only the start. Before believing it you want to know if
+the line fits the middle and the edges equally well, if the residuals have the
+shape the model assumes, and if something the model ignores is still sitting in
+them. Each of those questions has its standard plot, and they read best side by
+side, as one figure about one model.
+
+The model is a classic: diamond price against weight on log–log axes, fitted to
+the 53,940 stones of `ggplot2::diamonds`.
+
+```{r}
+dm <- as.data.frame(ggplot2::diamonds)
+dm$lcarat <- log10(dm$carat)
+dm$lprice <- log10(dm$price)
+
+fit <- lm(lprice ~ lcarat, data = dm)
+dm$fitted <- fitted(fit)
+dm$resid <- resid(fit)
+
+coef(fit)
+summary(fit)$r.squared
+```
+
+A slope of 1.68: a stone twice as heavy costs about 2^1.68^ ≈ 3.2 times as
+much. The
+fit explains 93% of the variance in log price. Now the four checks.
+
+## What is drawn
+
+- **A, the data and the fit.** With 54,000 points a scatter is one blob, so
+  `mark_density_2d_filled()` draws the 2-D kernel density as filled bands
+  instead. `contour_var = "ndensity"` scales the density to 0–1 and the
+  `breaks` start at 0.02, so the near-empty background is left unfilled.
+  `mark_quantile()` adds quantile regression lines for the 10th, 50th and 90th
+  percentiles (`quantreg::rq()`). If those lines run parallel, the spread
+  around the fit is the same for small and large stones.
+- **B, residuals against fitted values**, with the same density bands and
+  quantile lines. A good fit shows a flat band centred on zero.
+- **C, a normal Q–Q plot of the residuals.** `mark_qq()` plots sample
+  quantiles against normal quantiles and `mark_qq_line()` draws the line
+  through the quartiles. Points on the line mean normal residuals.
+- **D, residual ECDFs by cut.** `mark_ecdf()` draws one empirical cumulative
+  distribution per colour. If cut did not matter once weight is known, the five
+  curves would lie on top of each other.
+
+```{r}
+ramp <- c("#f4ecd8", "#e3cfa4", "#c9a874", "#a07a46", "#6b4f2c", "#3b2a1a")
+bands <- c(0.02, 0.1, 0.25, 0.5, 0.75, 1)
+
+a <- vplot(dm, width = 4, height = 3.4) |>
+  mark_density_2d_filled(x = lcarat, y = lprice,
+                         contour_var = "ndensity", breaks = bands) |>
+  scale_fill_gradientn(colours = ramp) |>
+  mark_quantile(x = lcarat, y = lprice, quantiles = c(0.1, 0.5, 0.9),
+                color = "#8c2d19", linewidth = 0.6) |>
+  labs(x = "log10 carat", y = "log10 price (USD)") |>
+  theme_minimal() |>
+  theme(legend.position = "none")
+
+b <- vplot(dm, width = 4, height = 3.4) |>
+  mark_density_2d_filled(x = fitted, y = resid,
+                         contour_var = "ndensity", breaks = bands) |>
+  scale_fill_gradientn(colours = ramp) |>
+  mark_quantile(x = fitted, y = resid, quantiles = c(0.1, 0.5, 0.9),
+                color = "#8c2d19", linewidth = 0.6) |>
+  labs(x = "fitted log10 price", y = "residual") |>
+  theme_minimal() |>
+  theme(legend.position = "none")
+
+c <- vplot(dm, width = 4, height = 3.4) |>
+  mark_qq(sample = resid, color = "#a07a46", size = 0.6, alpha = 0.5) |>
+  mark_qq_line(sample = resid, color = "#8c2d19") |>
+  labs(x = "normal quantile", y = "residual quantile") |>
+  theme_minimal()
+
+d <- vplot(dm, width = 4, height = 3.4) |>
+  mark_ecdf(x = resid, color = cut) |>
+  scale_color_manual(values = c("#d9c7a2", "#c9a874", "#a07a46", "#6b4f2c", "#3b2a1a")) |>
+  labs(x = "residual", y = "share of diamonds", color = "cut") |>
+  theme_minimal()
+
+diagnostics <- concat(a, b, c, d, ncol = 2, guides = "keep") |>
+  compose_annotation(
+    title = "Diagnosing a power law for diamond prices",
+    subtitle = "lm(log10(price) ~ log10(carat)) on 53,940 diamonds",
+    tag_levels = "A"
+  )
+```
+
+`concat()` lines the four panels up on a shared grid, so the axes of A and C, and
+of B and D, sit on the same vertical. `compose_annotation()` puts one title over
+all of them and letters the panels for the text to refer to.
+
+```{r}
+#| echo: false
+#| fig-alt: "Four-panel diagnostic figure. A: filled density of log price against log carat with three nearly parallel quantile lines. B: residuals against fitted values, a flat band around zero. C: normal Q-Q plot of residuals bending away from the line in both tails. D: five residual ECDF curves by cut, Fair shifted left and Ideal right."
+vg(diagnostics, "model-diagnostics", dpi = 130)
+```
+
+## Reading it
+
+**A and B: the line fits, and the spread is even.** The 10th, 50th and 90th
+percentile lines have slopes of 1.69, 1.65 and 1.72, close to parallel. The band
+between them is about 0.29 on the log10 scale, a factor of two in price, for a
+0.3-carat stone and a 2-carat one alike. In B the band is flat and centred on
+zero. The clumps along both panels are real: diamonds are cut to popular
+weights, so the data piles up at 0.3, 0.5, 0.7, 1 and 1.5 carats.
+
+**C: the tails are heavier than normal.** The middle 95% of the residuals sit
+on the line. Beyond about two standard deviations they bend away on both sides:
+there are more very cheap and very expensive stones for their weight than a
+normal distribution allows. Standard errors from `summary(fit)` assume normal
+residuals, so they will be a little optimistic here; the coefficients themselves
+are fine.
+
+**D: cut is still in the residuals.** The five curves are shifted, in order.
+The median residual of a Fair stone is −0.10 on the log10 scale and that of an
+Ideal stone +0.02. At the same weight, an Ideal cut costs about a third more than
+a Fair one. That is a variable the model should include. The next model would add
+`cut` (and colour and clarity, which do the same thing), and the four panels would
+be drawn again.
+
+For each mark on its own, see [density curve](density.qmd),
+[contours](contours.qmd) and [marginal distributions](marginal.qmd).

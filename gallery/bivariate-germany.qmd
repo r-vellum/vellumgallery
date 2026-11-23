@@ -1,0 +1,115 @@
+---
+title: "Older and poorer: Germany's districts on two variables"
+description: "A bivariate choropleth of all 400 German districts: median age against GDP per inhabitant, from Eurostat, in one nine-colour map with a 2-D legend."
+categories: [Stories, Spatial]
+image: figs/bivariate-germany.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+Germany has 400 districts (*Kreise* and *kreisfreie Städte*), and two numbers
+say a lot about each: how old its people are and how much it produces per
+person. Map either one alone and you get the familiar east–west split. Map both
+at once and the picture gets more specific: you can see where old goes with poor
+and young goes with rich, and where they don't.
+
+## The data
+
+Both indicators come from Eurostat at NUTS 3 level, which for Germany is the
+district level, for 2023:
+
+- **Median age** of the population, table
+  [`demo_r_pjanind3`](https://ec.europa.eu/eurostat/databrowser/view/demo_r_pjanind3/default/table)
+  (indicator `MEDAGEPOP`).
+- **GDP per inhabitant** at current market prices in euros, table
+  [`nama_10r_3gdp`](https://ec.europa.eu/eurostat/databrowser/view/nama_10r_3gdp/default/table)
+  (unit `EUR_HAB`).
+
+The boundaries are Eurostat's GISCO NUTS 2024 regions at 1:10 million,
+© EuroGeographics. The script `data/prep-de-districts.R` fetched all three once
+and wrote two small files, a 200 KB GeoJSON and a 17 KB CSV, which are committed
+with the site. Rendering the page downloads nothing.
+
+```{r}
+geo <- sf::st_read("data/de-districts.geojson", quiet = TRUE)
+ind <- read.csv("data/de-districts.csv")
+de <- merge(geo, ind, by = "nuts_id")
+de <- sf::st_transform(de, 25832) # ETRS89 / UTM 32N, the usual projection for Germany
+
+de$gdp_k <- round(de$gdp_per_inhabitant / 1000)
+summary(sf::st_drop_geometry(de)[c("median_age", "gdp_k")])
+cor(de$median_age, de$gdp_k)
+```
+
+The two are clearly related: a correlation of −0.58, older districts poorer.
+A bivariate map shows where the exceptions are.
+
+## What is drawn
+
+`bi_class()` cuts each variable into terciles and stores the pair as a class
+from `"1-1"` (young, low GDP) to `"3-3"` (old, high GDP). `mark_sf()` fills each
+district by that class, and `scale_fill_bivariate()` maps the nine classes onto
+a two-dimensional palette: median age runs left to right in the legend, GDP
+bottom to top. `"Brown"` is one of the four built-in palettes, and the one that
+sits best on the parchment.
+
+`guide_bivariate()` draws the key as a 3 × 3 grid with the tercile breaks written
+on its edges.
+
+```{r}
+de <- bi_class(de, median_age, gdp_k)
+
+p <- vplot(de, width = 7, height = 7.5) |>
+  mark_sf(fill = bi_class, color = "#f7f1e3", linewidth = 0.15) |>
+  coord_sf() |>
+  scale_fill_bivariate(palette = "Brown") |>
+  guides(fill = guide_bivariate(
+    xlab = "median age",
+    ylab = "GDP per inhabitant (€1,000)",
+    key.size = 9
+  )) |>
+  labs(
+    title = "Older and poorer, younger and richer",
+    subtitle = "400 German districts by median age and GDP per inhabitant, 2023",
+    caption = "Data: Eurostat (demo_r_pjanind3, nama_10r_3gdp). Boundaries: GISCO NUTS 2024, © EuroGeographics"
+  ) |>
+  theme_void()
+```
+
+```{r}
+#| echo: false
+#| fig-alt: "Bivariate choropleth of Germany's 400 districts: most of the former East in gold (old, low GDP), southern cities and their suburbs in purple (young, high GDP), with scattered dark brown districts that are both old and rich"
+vg(p, "bivariate-germany", dpi = 130)
+```
+
+## Reading it
+
+**Gold, old and poorer, is the East.** Of the 75 districts in Brandenburg,
+Mecklenburg-Western Pomerania, Saxony, Saxony-Anhalt and Thuringia, 59% are in
+the oldest tercile and the lowest GDP tercile at once, against 11% in the West.
+The oldest districts in the country, with a median age near 55, are all there:
+Mansfeld-Südharz, Suhl, Greiz, Dessau-Roßlau. In the West, gold is scattered over
+rural districts: Lower Saxony, the Hessian uplands (Vogelsberg, Werra-Meißner),
+the Palatinate and Hunsrück (Kusel, Birkenfeld), the Saarland.
+
+**Purple, young and rich, is the cities of the South and West.** The light
+purple and violet patches are university and industrial cities: Munich,
+Stuttgart, Frankfurt, Ingolstadt, Erlangen, Regensburg, Darmstadt, Ulm.
+Heidelberg is the youngest district in Germany, with a median age of 35.6.
+Wolfsburg, the Volkswagen town, has the highest GDP per inhabitant at €185,000,
+which is why the top break of the GDP key reads 185.
+
+**Dark brown, old and rich, is rare**: 11 districts. Some are wealthy places
+people retire to, like Baden-Baden and Starnberg. Two stand out in the far east:
+Cottbus and Spree-Neiße in Lusatia, where the lignite mines and power stations
+still produce a lot per head in districts whose young people have mostly left.
+
+**Grey, young and low GDP, almost doesn't exist**: three districts out of 400.
+In Germany a young population and a weak economy rarely go together.
+
+Districts are coloured by class, not by area, so large rural districts dominate
+the picture while dense cities shrink to dots. For the same map type on North
+Carolina counties, see the [choropleth page](choropleth.qmd#two-variables-on-one-map).

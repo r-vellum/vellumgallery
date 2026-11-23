@@ -1,0 +1,104 @@
+---
+title: "275 years of sunspots, overview and detail"
+description: "A long time series with a thin overview strip: brush the strip and the main chart zooms to the brushed years. select_interval() and bind_scale(), composed into one widget, plus the range navigator."
+categories: [Stories, Interactive, Composition]
+image: figs/overview-detail.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+```
+
+Astronomers have counted sunspots every month since 1749. Drawn whole, the
+record is a row of 25 peaks, the eleven-year solar cycle, and the page width
+puts about four years in a pixel. That is enough to see the cycle and not enough
+to see one. Overview and detail is the standard fix: a thin strip shows the
+whole series, you brush a stretch of it, and the main chart redraws at that
+range.
+
+The data is `sunspot.month`, which ships with R: the monthly mean of the
+international sunspot number from the Royal Observatory of Belgium (WDC-SILSO),
+3,310 months from January 1749 to October 2024.
+
+```{r}
+ss <- data.frame(
+  date = seq(as.Date("1749-01-15"), by = "month", length.out = length(sunspot.month)),
+  n = as.numeric(sunspot.month)
+)
+# A centred 13-month running mean: the usual way to smooth out the month-to-month noise.
+ss$smooth <- as.numeric(stats::filter(ss$n, rep(1 / 13, 13), sides = 2))
+```
+
+## Two plots and one selection
+
+The interaction is declared in the spec, not wired up in JavaScript. A free-standing
+`select_interval()` defines a brush over `x`. The overview registers it with
+`add_selection()`, which makes it the plot you drag on. The detail calls
+`bind_scale()` with the same selection, which ties its x range to the brush:
+brushing the overview zooms the detail, and clearing the brush (click on empty
+space, or press Escape) zooms it back out.
+
+```{r}
+brush <- select_interval("window", encodings = "x")
+
+detail <- vplot(ss, width = 9, height = 3.6) |>
+  mark_area(x = date, y = n, fill = "#e3cfa4", alpha = 0.8) |>
+  mark_line(x = date, y = smooth, color = "#6b4f2c", linewidth = 0.7) |>
+  labs(x = NULL, y = "sunspots") |>
+  theme_minimal() |>
+  bind_scale(brush)
+
+overview <- vplot(ss, width = 9, height = 1.1) |>
+  mark_area(x = date, y = n, fill = "#b9a888") |>
+  labs(x = NULL, y = NULL) |>
+  theme_minimal() |>
+  theme(axis.text.y = element_blank(), panel.grid = element_blank()) |>
+  add_selection(brush)
+
+sunspots <- concat(detail, overview, ncol = 1, heights = c(3.6, 1.1)) |>
+  compose_annotation(
+    title = "Monthly sunspot number, 1749 to 2024",
+    subtitle = "Brush the strip below to zoom; the line is a 13-month running mean"
+  )
+```
+
+`concat()` stacks the two plots into one figure and lines up their panels, so the
+strip sits exactly under the chart it controls. On a static render the selection
+does nothing and you get both views at full range:
+
+```{r}
+#| echo: false
+#| fig-alt: "Area chart of monthly sunspot numbers from 1749 to 2024 showing about 25 eleven-year cycles, with a thin overview strip of the same series underneath"
+vg(sunspots, "overview-detail", dpi = 120)
+```
+
+## The widget
+
+`as_widget()` turns the composition into the interactive version. Drag across a few
+decades of the bottom strip and the top chart zooms to them, with its axis
+re-ticked for the new range: at fifty years you can count the cycles, at ten you
+can see the double peak many of them have, and the dead decades of the Dalton
+Minimum around 1800 to 1820 come into focus. Drag the brush to slide the window.
+
+`navigator = navigator_options()` adds the second control, a range navigator
+under the widget. It is a miniature of the whole figure with a window on it that
+marks what the chart shows. Drag the window to pan, drag either edge to zoom.
+It follows the wheel and keyboard zoom too.
+
+```{r}
+#| column: page-inset-right
+sunspots |>
+  as_widget(navigator = navigator_options(height = 48))
+```
+
+None of this needs a server. The widget carries both plots, the selection and
+the binding in its payload, and the browser enacts them: the brush is
+converted to a date range through the overview's own scale, and the detail
+redraws at that range. Under Shiny, the same widget reports the brushed range
+as `input$<id>_brush`.
+
+For the other ways one view can drive another, see
+[linked views with crosstalk](crosstalk.qmd) and
+[declarative interactivity](declarative-interactivity.qmd).

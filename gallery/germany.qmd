@@ -1,7 +1,7 @@
 ---
 title: "OpenStreetMap Germany, two ways"
 description: "The tagged points of interest, then all 436 million nodes in the country, aggregated in DuckDB so they fit in memory. On a warm earth palette."
-categories: [Spatial, Big data]
+categories: [Stories, Spatial, Big data]
 image: figs/germany-nodes-thumb.png
 ---
 

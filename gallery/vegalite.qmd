@@ -1,0 +1,142 @@
+---
+title: "Paste a Vega-Lite spec"
+description: "spec_from_vegalite() turns a Vega-Lite JSON spec into a vellumplot plot, which then renders, composes and becomes a widget like any other. spec_to_vegalite() goes back the other way."
+categories: [Backend, Interactive]
+image: figs/vegalite.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+```
+
+[Vega-Lite](https://vega.github.io/vega-lite/) is the most widely used
+grammar of graphics written as data: a chart is a JSON document with a mark,
+encodings and scales. There are thousands of Vega-Lite specs in notebooks,
+dashboards and documentation, and language models write them readily. vellumplot
+is a grammar of graphics too, and its plots [are specs](spec-as-data.qmd)
+already, so moving between the two is a translation rather than a
+reimplementation.
+
+## A spec from the Vega-Lite gallery
+
+This is the [simple bar chart](https://vega.github.io/vega-lite/examples/bar.html)
+from the Vega-Lite examples, pasted unchanged. Its data is inline, so the JSON is
+the whole chart.
+
+```{r}
+bar_spec <- '{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "description": "A simple bar chart with embedded data.",
+  "data": {
+    "values": [
+      {"a": "A", "b": 28}, {"a": "B", "b": 55}, {"a": "C", "b": 43},
+      {"a": "D", "b": 91}, {"a": "E", "b": 81}, {"a": "F", "b": 53},
+      {"a": "G", "b": 19}, {"a": "H", "b": 87}, {"a": "I", "b": 52}
+    ]
+  },
+  "mark": "bar",
+  "encoding": {
+    "x": {"field": "a", "type": "nominal", "axis": {"labelAngle": 0}},
+    "y": {"field": "b", "type": "quantitative"}
+  }
+}'
+
+bars <- spec_from_vegalite(bar_spec)
+summary(bars)
+```
+
+`spec_from_vegalite()` returns an ordinary `PlotSpec`: one `mark_bar()` layer,
+the inline values as its data, a discrete x and a continuous y. It renders like
+any other plot.
+
+```{r}
+#| echo: false
+#| fig-alt: "Bar chart of nine categories A to I with heights from 19 to 91, converted from the Vega-Lite simple bar chart example"
+vg(bars |> labs(title = "The Vega-Lite simple bar chart, drawn by vellum"), "vegalite-bar")
+```
+
+## External data, supplied from R
+
+Most real specs point at a file: `"data": {"url": "data/penguins.json"}`.
+`spec_from_vegalite()` does not download it. Pass the table you already have as
+`data =`, with the column names the spec uses. Here the Palmer Penguins get the
+names of the [vega-datasets](https://github.com/vega/vega-datasets) copy, and
+the spec is a scatter in the style of the Vega-Lite gallery.
+
+Anything the translation cannot carry over is reported, not dropped in silence.
+This spec asks for a `tooltip` channel, which the bridge does not map yet, and
+the warning says so:
+
+```{r}
+#| warning: true
+pen <- palmerpenguins::penguins
+pen <- as.data.frame(pen[complete.cases(pen), ])
+names(pen) <- c("Species", "Island", "Beak Length (mm)", "Beak Depth (mm)",
+                "Flipper Length (mm)", "Body Mass (g)", "Sex", "Year")
+
+scatter_spec <- '{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": {"url": "data/penguins.json"},
+  "mark": "point",
+  "encoding": {
+    "x": {"field": "Flipper Length (mm)", "type": "quantitative", "scale": {"zero": false}},
+    "y": {"field": "Body Mass (g)", "type": "quantitative", "scale": {"zero": false}},
+    "color": {"field": "Species", "type": "nominal"},
+    "shape": {"field": "Species", "type": "nominal"},
+    "tooltip": {"field": "Island", "type": "nominal"}
+  }
+}'
+
+penguins <- spec_from_vegalite(scatter_spec, data = pen)
+```
+
+## Now it is a vellum plot
+
+Once imported, the spec takes the rest of the grammar. Pipe on a theme and
+labels, and it is a widget with one more call:
+
+```{r}
+penguins <- penguins |>
+  labs(title = "Penguins, from a Vega-Lite spec") |>
+  theme_minimal()
+```
+
+```{r}
+#| include: false
+render_plot(penguins, "figs/vegalite.png", dpi = 150)
+```
+
+```{r}
+penguins |> as_widget(height = 400)
+```
+
+Hover a point, click a species in the legend, drag to brush, scroll to zoom. The
+widget hosts the scene vellum solved; no Vega runtime is involved.
+
+## The round trip
+
+`spec_to_vegalite()` translates the other way, for handing a vellum plot to a
+Vega-Lite tool. Inline data comes along as `values`:
+
+```{r}
+vl <- spec_to_vegalite(bars)
+str(vl[c("mark", "encoding")], max.level = 3)
+```
+
+The two grammars overlap for the common cases: marks, encodings, scale domains
+and types, binning and counting, faceting, inline data and titles. Outside that
+subset (polar coordinates, layer effects, patterns, statistical marks Vega-Lite
+does not have), both directions report what they left out.
+
+## Specs from a model
+
+Because a Vega-Lite spec is just JSON, it is also what a language model will
+often give you when asked for a chart. The import above is one way in. The other
+is to let the model write vellumplot's own spec format directly:
+`vplot_ask(prompt, data, responder)` sends the model the JSON schema, the real
+column names from `spec_fields()` and your request, and validates what comes back
+with `vplot_from_spec()`. `responder` is any function from payload to JSON, so it
+can wrap any model API. The [agent specs page](agent-specs.qmd) walks through that
+loop, including the MCP server that exposes it to agents.

@@ -1,0 +1,120 @@
+---
+title: "Fifty-two weeks of New York"
+description: "A year of hourly temperatures as 52 stacked ridgelines, white on black, after Joy Division's Unknown Pleasures. Then the same poster cycling through New York's three airports."
+categories: [Statistical, Effects, Animation]
+image: figs/ridgeline-poster.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+The cover of Joy Division's *Unknown Pleasures* is a stack of 80 radio pulses
+from a pulsar, each line drawn a little lower than the one before and hiding the
+lines behind it. The same picture works for anything that has a distribution per
+row. Here each row is one week of 2013 and the line is that week's spread of
+hourly air temperatures in New York: narrow and cold at the top, broad and warm
+in the middle, cold again at the bottom.
+
+The data is `weather` from the [nycflights13](https://github.com/tidyverse/nycflights13)
+package: one reading an hour at Newark, JFK and LaGuardia for the whole year,
+26,000 rows, taken from NOAA's Integrated Surface Database.
+
+```{r}
+w <- as.data.frame(nycflights13::weather)
+w <- w[!is.na(w$temp), ]
+# One known bad reading: 13 °F at JFK on a May evening.
+w <- w[!(w$origin == "JFK" &
+         w$time_hour == as.POSIXct("2013-05-08 22:00", tz = "America/New_York")), ]
+
+w$temp_c <- (w$temp - 32) * 5 / 9
+# Weeks of seven days from 1 January; the last day of the year joins week 52.
+w$week <- pmin((as.integer(format(w$time_hour, "%j")) - 1) %/% 7 + 1, 52)
+# The first level sits at the bottom, so put week 52 first: January on top.
+w$week <- factor(w$week, levels = 52:1)
+w$airport <- c(EWR = "Newark", JFK = "JFK", LGA = "LaGuardia")[w$origin]
+```
+
+## What is drawn
+
+`mark_ridgeline()` takes a numeric `x` and a categorical `y`, estimates a kernel
+density of `x` for each level of `y`, and draws it as a filled outline sitting on
+that row. `height` sets how tall a ridge may grow in units of the row spacing:
+the default of 1.4 lets neighbours overlap a little, and 4 here lets the summer
+peaks climb well into the rows above.
+
+The look comes from two settings. Every ridge is filled black, the colour of the
+page, and stroked in off-white. Each ridge is drawn after the one above it, so
+its fill covers whatever it overlaps, and the lines behind disappear where they
+should. `theme_void()` drops the axes, gridlines and panel, and one
+`axis.text.x` element puts back the temperature scale along the bottom.
+
+```{r}
+ink <- "#f4eee0"
+
+p <- vplot(w, width = 6, height = 7.5) |>
+  mark_ridgeline(x = temp_c, y = week, height = 4, linewidth = 0.5,
+                 fill = "black", color = "#f4eee0") |>
+  scale_x_continuous(breaks = c(-10, 0, 10, 20, 30),
+                     labels = c("−10 °C", "0 °C", "10 °C", "20 °C", "30 °C")) |>
+  labs(
+    title = "FIFTY-TWO WEEKS OF NEW YORK",
+    subtitle = "Hourly air temperature at Newark, JFK and LaGuardia in 2013,\none ridge per week, January at the top",
+    caption = "Data: nycflights13::weather (NOAA Integrated Surface Database)"
+  ) |>
+  theme_void() |>
+  theme(
+    plot.background = element_rect(fill = "black", color = NA),
+    plot.title = element_text(color = ink, size = 20, hjust = 0.5),
+    plot.subtitle = element_text(color = "#a8a294", size = 10, hjust = 0.5),
+    plot.caption = element_text(color = "#6f6a60", size = 8),
+    axis.text.x = element_text(color = "#a8a294", size = 9)
+  )
+```
+
+The stroke colour is written out as a string, not as `ink`. A mark argument that
+names a variable is read as a mapping, the way `color = species` is, so
+`color = ink` would put a one-entry legend on the poster. The theme elements
+take ordinary values, so `ink` works there.
+
+```{r}
+#| echo: false
+#| fig-alt: "Fifty-two white density ridges on black, one per week of 2013, stacked top to bottom: narrow cold ridges at the top, wide warm ones shifted right in the middle, cold ones again at the bottom"
+vg(p, "ridgeline-poster")
+```
+
+Read it top to bottom and the year goes by. January's ridges are low and wide,
+spread across twenty degrees by cold snaps and thaws. Through the spring they
+drift right and grow taller, and by July a week's temperatures sit in a tight
+band near 25–30 °C. In the last weeks the ridges spread out and move back left.
+Weeks with two peaks are weeks where the weather changed: a cold front halfway
+through splits the readings in two.
+
+## Three airports
+
+The three airports are a few kilometres apart, but not the same place. JFK sits
+on Jamaica Bay, LaGuardia on the East River, Newark inland across the Hudson.
+`transition_states(airport)` draws the poster once per airport and morphs each
+week's ridge from one outline to the next. The scales are trained once over all
+three, so the ridges move against a fixed axis.
+
+```{r}
+a <- p |>
+  labs(subtitle = "Hourly air temperature at {closest_state} in 2013,\none ridge per week, January at the top") |>
+  transition_states(airport) |>
+  animate(nframes = 45, fps = 15)
+```
+
+```{r}
+#| echo: false
+#| fig-alt: "Animation of the ridgeline poster morphing between Newark, JFK and LaGuardia; the summer ridges shift slightly between airports"
+vg_anim(a, "ridgeline-airports", ext = "gif")
+```
+
+The differences are small and they are in summer. At Newark and LaGuardia the
+June-to-August ridges reach a degree or two further right than at JFK, where
+the sea breeze off the bay keeps the hottest afternoons cooler (the 95th
+percentile of summer readings is 32 °C at the first two, 30 °C at JFK). The winter weeks barely move. The poster is two colours, so
+this one is saved as a GIF: it needs nothing beyond GIF's 256 colours, and comes
+out at half the size of an animated PNG.
