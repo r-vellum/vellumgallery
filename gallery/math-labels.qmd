@@ -1,0 +1,117 @@
+---
+title: "Math in labels"
+description: "TeX formulas in titles, legends, annotations and facet strips. vellum typesets the math itself, so a figure needs no LaTeX installation and looks the same in PNG, SVG, PDF and the widget."
+categories: [Text]
+image: figs/math-normal.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+`tex()` takes a formula in TeX notation and returns a label that can go
+anywhere a text label goes: a title, an axis name, a legend key, an annotation.
+vellum lays the formula out itself, following TeX's rules and the bundled
+STIX Two Math font. Nothing calls out to LaTeX, so it works on a machine
+without a TeX installation, and the PNG, the SVG and the PDF all draw the same
+glyphs in the same places.
+
+`md()` labels take inline math between `$` signs, so a title can mix prose in
+the plot's own font with a symbol or two. A closing `$` followed by a letter or
+a digit stays a dollar sign, so "costs $5" and "($M)" are left alone. Where a
+dollar sign would otherwise start a formula, write `\$`.
+
+```{r}
+x <- seq(-5, 5, length.out = 400)
+sigma <- c(0.5, 1, 2)
+dens <- do.call(rbind, lapply(sigma, function(s) {
+  data.frame(x = x, y = dnorm(x, 0, s), s = factor(s))
+}))
+pal <- c("#b2182b", "#2166ac", "#4d9221")
+
+p <- vplot(dens, width = 7.5, height = 4.6) |>
+  mark_area(x = x, y = y, fill = s, alpha = 0.18, position = "identity") |>
+  mark_line(x = x, y = y, color = s, linewidth = 0.9) |>
+  scale_color_manual(
+    values = pal,
+    labels = list(tex("\\sigma = 0.5"), tex("\\sigma = 1"), tex("\\sigma = 2"))
+  ) |>
+  scale_fill_manual(values = pal) |>
+  guides(fill = "none") |>
+  annotate(
+    "text", x = 2.9, y = 0.62, size = 13,
+    label = tex(
+      "f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}}\\, e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}",
+      display = TRUE
+    )
+  ) |>
+  labs(
+    title = md("The normal density for three values of $\\sigma$, with $\\mu = 0$"),
+    x = tex("x"),
+    y = tex("f(x \\mid \\mu, \\sigma)"),
+    color = NULL
+  ) |>
+  theme_minimal()
+```
+
+```{r}
+#| echo: false
+vg(p, "math-normal")
+```
+
+`display = TRUE` sets a formula in display style: full-size fractions and
+limits above and below a sum. Without it, a formula is set in text style, the
+way it would sit inside a sentence.
+
+## Habits from ggplot2: plotmath
+
+If you already write R's plotmath, keep writing it. `plotmath()` reads a
+plotmath string, `tex()` also accepts an unevaluated expression
+(`tex(quote(x[i]^2))`, `bquote()`, `expression()`), and the vellumplot
+functions use ggplot2's names for the column-wise versions:
+`mark_text(parse = TRUE)` reads each label as plotmath, and the
+`label_parsed` labeller does the same for facet strips. Single letters are set
+in italic, as TeX does; longer names like `mpg` stay upright.
+
+```{r}
+alpha <- c("alpha == 1/2", "alpha == 1", "alpha == 2")
+xs <- seq(0, 2, length.out = 200)
+power <- do.call(rbind, lapply(seq_along(alpha), function(i) {
+  data.frame(x = xs, y = xs^c(0.5, 1, 2)[i], f = alpha[i])
+}))
+power$f <- factor(power$f, levels = alpha)
+curve_labels <- data.frame(
+  x = 0.08, y = 3.6,
+  f = factor(alpha, levels = alpha),
+  label = c("y == sqrt(x)", "y == x", "y == x^2")
+)
+
+p2 <- vplot(power, width = 7.5, height = 3.2) |>
+  mark_line(x = x, y = y, linewidth = 0.9, color = "#2166ac") |>
+  mark_text(
+    data = curve_labels, x = x, y = y, label = label,
+    parse = TRUE, size = 13, hjust = 0
+  ) |>
+  facet_wrap(~f, nrow = 1, labeller = label_parsed) |>
+  labs(
+    title = md("Power laws $y = x^\\alpha$ for three exponents"),
+    x = tex("x"),
+    y = tex("y")
+  ) |>
+  theme_minimal()
+```
+
+```{r}
+#| echo: false
+vg(p2, "math-power")
+```
+
+## The font
+
+The default math font is STIX Two Math, which ships inside vellum under the
+SIL Open Font License, so every machine draws the same formula. Set
+`options(vellum.math_font = ...)` to a family name or a font file to use
+another OpenType math font, such as Latin Modern Math for the classic LaTeX
+look or Fira Math for a sans-serif one. vellum checks that the font has the
+math tables it needs and says so if it does not.
