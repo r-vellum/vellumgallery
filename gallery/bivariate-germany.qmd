@@ -80,7 +80,8 @@ p <- vplot(de, width = 7, height = 7.5) |>
 ```
 
 A small map of Europe in the corner says where Germany is. `inset()` lays it
-over the plot at fractions of its width and height, and
+over the plot at fractions of its width and height (`align_to = "plot"`
+measures them in the area beside the map that holds the legend), and
 `vl_shadow()` lifts it off the page with a soft drop shadow. Both maps use
 `coord_sf()`, which keeps their shapes: the inset is fitted inside the box it
 is given, so its frame hugs the map instead of filling the box.
@@ -97,12 +98,11 @@ locator <- vplot(europe) |>
   guides(fill = "none") |>
   theme_void() |>
   theme(
-    panel.background = element_rect(fill = "#f7f1e3", color = "#b9a888", linewidth = 0.3),
-    plot.margin = c(0, 0, 0, 0)
+    panel.background = element_rect(fill = "#f7f1e3", color = "#b9a888", linewidth = 0.3)
   )
 
 p <- p |>
-  inset(locator, left = 0.7, bottom = 0.06, right = 0.98, top = 0.32,
+  inset(locator, left = 0.74, bottom = 0.02, right = 1, top = 0.3, align_to = "plot",
         shadow = vellum::vl_shadow(dx = 1.5, dy = 1.5, blur = 4, col = "#3b2a1640"))
 ```
 
