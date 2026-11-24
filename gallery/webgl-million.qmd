@@ -1,0 +1,103 @@
+---
+title: "A million points on the GPU"
+description: "One million points of a Clifford attractor that pan and zoom at full frame rate. Past 50,000 records, as_widget() redraws the zoomed view with WebGL2 instead of a 2D canvas."
+categories: [Interactive, Big data]
+image: figs/webgl-million.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+library(vellumwidget)
+```
+
+A [big scatter](big-interactive.qmd) stays interactive because `as_widget()`
+ships one embedded image plus a compact index in place of a node per point.
+Zooming redraws the visible points on top of that image so they stay sharp. On a
+2D canvas that redraw costs about a second per frame at a million points, which
+makes panning feel stuck.
+
+From 50,000 records up, the widget does the redraw with WebGL2. Every point is
+one instance of a small quad, and a fragment shader cuts out the marker shape,
+so the GPU draws the whole list in a single call. On a laptop a zoom frame over
+a million points takes about 30 ms on the GPU, against roughly 1.3 s on the
+canvas.
+
+The data is one orbit of a Clifford attractor: each point comes from the one
+before it. Colour shows how far the orbit jumped to get there, split into five
+equal-count bands.
+
+```{r}
+n <- 1e6
+a <- -1.4; b <- 1.6; c <- 1.0; d <- 0.7
+x <- y <- numeric(n)
+x0 <- y0 <- 0.1
+for (i in seq_len(n)) {
+  x1 <- sin(a * y0) + c * cos(a * x0)
+  y1 <- sin(b * x0) + d * cos(b * y0)
+  x[i] <- x1; y[i] <- y1
+  x0 <- x1; y0 <- y1
+}
+
+step <- c(0, sqrt(diff(x)^2 + diff(y)^2))
+speed <- cut(
+  step, quantile(step, 0:5 / 5), include.lowest = TRUE,
+  labels = c("slowest", "slow", "middle", "fast", "fastest")
+)
+df <- data.frame(x = x, y = y, speed = speed, id = seq_len(n))
+
+pal <- c(
+  slowest = "#f6d186", slow = "#f19b5c", middle = "#d9534f",
+  fast = "#8e3b88", fastest = "#3d5a98"
+)
+ink <- "#d8cfbd"
+
+p <- vplot(df, width = 8, height = 7) |>
+  mark_point(
+    x = x, y = y, color = speed, data_id = id,
+    size = 0.12, alpha = 0.3
+  ) |>
+  scale_color_manual(values = pal) |>
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 3))) |>
+  coord_fixed() |>
+  labs(title = "A million points of a Clifford attractor", color = "step length") |>
+  theme_void() |>
+  theme(
+    plot.background = element_rect(fill = "#14110f", color = NA),
+    plot.margin = c(5.5, 5.5, 5.5, 5.5),
+    plot.title = element_text(color = "#f4eee0", size = 16),
+    legend.title = element_text(color = ink),
+    legend.text = element_text(color = ink)
+  )
+```
+
+```{r}
+#| include: false
+render_plot(p, "figs/webgl-million.png", dpi = 120)
+```
+
+Scroll to zoom into one of the folds and drag to pan. Click a legend swatch to
+isolate one band: the GPU restyles a million points in place, with no image
+rebuilt. The whole page is about 8 MB: the full view ships as one
+image, and the index stores each point in a few bytes.
+
+```{r}
+as_widget(p, height = 630)
+```
+
+## Choosing the renderer
+
+`render_options(webgl = "auto")` is the default. It uses WebGL2 for any draw
+list of 50,000 records or more and keeps the 2D canvas below that, where the
+canvas is already fast. `webgl = "always"` uses the GPU for every list and
+`webgl = "never"` turns it off:
+
+```{r}
+#| eval: false
+as_widget(p, render = render_options(webgl = "never"))
+```
+
+If the browser has no WebGL2 context, or a list holds something the GPU path
+does not draw (gradients, dashed strokes, grouped marks, very large paths), that
+list falls back to the canvas on its own. The points look the same either way, so `"auto"` is
+safe to leave on.
