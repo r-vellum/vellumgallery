@@ -66,6 +66,7 @@ p <- vplot(w, width = 6, height = 7.5) |>
   theme_void() |>
   theme(
     plot.background = element_rect(fill = "black", color = NA),
+    plot.margin = c(5.5, 5.5, 5.5, 5.5),
     plot.title = element_text(color = ink, size = 20, hjust = 0.5),
     plot.subtitle = element_text(color = "#a8a294", size = 10, hjust = 0.5),
     plot.caption = element_text(color = "#6f6a60", size = 8),

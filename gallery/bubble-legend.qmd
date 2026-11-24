@@ -34,6 +34,7 @@ p <- vplot(states, width = 8.6, height = 4.6) |>
   xlim(-127, -65) |>
   ylim(23, 51) |>
   theme_void() |>
+  theme(plot.margin = c(5.5, 5.5, 5.5, 5.5)) |>
   labs(title = "Population by state, 1977", size = "thousands")
 ```
 
@@ -60,6 +61,7 @@ p2 <- vplot(states, width = 8.6, height = 4.6) |>
   xlim(-127, -65) |>
   ylim(23, 51) |>
   theme_void() |>
+  theme(plot.margin = c(5.5, 5.5, 5.5, 5.5)) |>
   labs(title = "Population by state, 1977", size = "thousands")
 ```
 
@@ -86,6 +88,7 @@ p3 <- vplot(states, width = 8.6, height = 4.6) |>
   xlim(-127, -65) |>
   ylim(23, 51) |>
   theme_void() |>
+  theme(plot.margin = c(5.5, 5.5, 5.5, 5.5)) |>
   labs(title = "The same map with range = c(1.5, 5)", size = "thousands")
 ```
 

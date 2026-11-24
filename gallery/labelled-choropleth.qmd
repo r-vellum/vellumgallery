@@ -26,6 +26,7 @@ p <- vplot(nc, width = 10, height = 4.4) |>
   mark_sf_label(label = NAME, size = 2.6) |>
   coord_sf() |>
   theme_void() |>
+  theme(plot.margin = c(5.5, 5.5, 5.5, 5.5)) |>
   labs(title = "Sudden infant deaths per 1000 live births, North Carolina 1974",
        fill = "per 1000")
 ```
@@ -53,6 +54,7 @@ p2 <- vplot(nc, width = 10, height = 4.4) |>
   mark_sf_label(label = NAME, size = 4.2, data = top) |>
   coord_sf() |>
   theme_void() |>
+  theme(plot.margin = c(5.5, 5.5, 5.5, 5.5)) |>
   labs(title = "The eight highest rates", fill = "per 1000")
 ```
 
@@ -115,6 +117,7 @@ p4 <- vplot(nc, width = 9, height = 4.4) |>
   mark_sf_label(label = NAME, size = 4.2, data = top) |>
   coord_sf(crs = "EPSG:32119") |>
   theme_void() |>
+  theme(plot.margin = c(5.5, 5.5, 5.5, 5.5)) |>
   labs(title = "The same eight, on the North Carolina state plane",
        fill = "per 1000")
 ```

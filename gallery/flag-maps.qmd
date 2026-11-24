@@ -48,6 +48,7 @@ flag_map <- function(name, iso2, px = 200) {
     clip_to(poly) |>
     coord_sf() |>
     theme_void() |>
+    theme(plot.margin = c(5.5, 5.5, 5.5, 5.5)) |>
     labs(title = name)
 }
 ```
