@@ -54,7 +54,7 @@ ink <- "#d8cfbd"
 
 p <- vplot(df, width = 8, height = 7) |>
   mark_point(
-    x = x, y = y, color = speed, data_id = id,
+    x = x, y = y, color = speed, data_id = id, tooltip = speed,
     size = 0.12, alpha = 0.3
   ) |>
   scale_color_manual(values = pal) |>
@@ -76,13 +76,17 @@ p <- vplot(df, width = 8, height = 7) |>
 render_plot(p, "figs/webgl-million.png", dpi = 120)
 ```
 
-Scroll to zoom into one of the folds and drag to pan. Click a legend swatch to
-isolate one band: the GPU restyles a million points in place, with no image
-rebuilt. The whole page is about 8 MB: the full view ships as one
-image, and the index stores each point in a few bytes.
+Hover a point for its band and scroll to zoom into one of the folds. Dragging brushes a selection; to pan
+instead, click the drag-mode button at the left of the toolbar until it shows
+the hand, or use the arrow keys. `legend_click = "hide"` turns the legend into
+a filter: click a swatch to hide its band, double-click to show that band on
+its own, and double-click it again to bring the others back. The GPU redraws
+the million points each time, with no image rebuilt. The whole page is about
+8 MB: the full view ships as one image, and the index stores each point in a
+few bytes.
 
 ```{r}
-as_widget(p, height = 630)
+as_widget(p, height = 630, legend_click = "hide")
 ```
 
 ## Choosing the renderer
@@ -99,5 +103,5 @@ as_widget(p, render = render_options(webgl = "never"))
 
 If the browser has no WebGL2 context, or a list holds something the GPU path
 does not draw (gradients, dashed strokes, grouped marks, very large paths), that
-list falls back to the canvas on its own. The points look the same either way, so `"auto"` is
-safe to leave on.
+list falls back to the canvas on its own. The points look the same either way,
+so `"auto"` is safe to leave on.
