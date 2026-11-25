@@ -1,0 +1,23 @@
+meta:
+  name: Ledger
+color:
+  palette:
+    oxblood: "#8c2f39"
+    slate: "#4a6378"
+    olive: "#6b7d3a"
+    ink: "#2b2118"
+  foreground: ink
+  background: "#f7f1e5"
+  primary: oxblood
+typography:
+  fonts:
+    - family: Lato
+      source: google
+    - family: Playfair Display
+      source: google
+  base:
+    family: Lato
+    weight: 300
+  headings:
+    family: Playfair Display
+    weight: 700

@@ -1,0 +1,19 @@
+meta:
+  name: Harbour
+color:
+  palette:
+    navy: "#1d3557"
+    teal: "#2a9d8f"
+    sand: "#e9c46a"
+    coral: "#e76f51"
+  foreground: navy
+  background: "#ffffff"
+  primary: teal
+typography:
+  fonts:
+    - family: IBM Plex Sans
+      source: google
+  base: IBM Plex Sans
+  headings:
+    family: IBM Plex Sans
+    weight: 600

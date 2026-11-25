@@ -1,0 +1,19 @@
+meta:
+  name: Midnight
+color:
+  palette:
+    amber: "#ffb000"
+    mint: "#5ee6c4"
+    rose: "#ff6f91"
+    ice: "#cfe8ff"
+  foreground: "#e8eaf0"
+  background: "#14161c"
+  primary: amber
+typography:
+  fonts:
+    - family: Inter
+      source: google
+  base: Inter
+  headings:
+    family: Inter
+    weight: 700

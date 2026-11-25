@@ -1,0 +1,121 @@
+---
+title: "One plot, three brands"
+description: "theme_brand() reads a brand.yml file, the format behind Quarto's _brand.yml, and turns its colours, palette and fonts into a plot theme. The same code, three brands, and a switch that brands every plot in a document."
+categories: [Basics, Text]
+image: figs/brand-ledger.png
+---
+
+```{r}
+#| include: false
+source("_helper.R")
+```
+
+A [brand.yml](https://posit-dev.github.io/brand-yml/) file describes an
+organisation's look in one place: its colours, a named palette and its fonts.
+Quarto reads it from `_brand.yml` to style a whole website or report.
+`theme_brand()` reads the same file and gives a plot the same look, so the
+figures match the page around them.
+
+This is one of the three brand files used on this page:
+
+```{r}
+#| echo: false
+#| class-output: yaml
+cat(readLines("brands/ledger.yml"), sep = "\n")
+```
+
+The plot is written once, with no colours and no theme:
+
+```{r}
+pen <- datasets::penguins
+pen <- pen[complete.cases(pen), ]
+
+p <- vplot(pen, width = 7.5, height = 4.4) |>
+  mark_point(x = flipper_len, y = body_mass, color = species,
+             size = 2, alpha = 0.75) |>
+  mark_smooth(x = flipper_len, y = body_mass, color = species,
+              method = "lm", se = FALSE) |>
+  labs(
+    title = "Bigger flippers, heavier penguins",
+    subtitle = "Palmer Station, Antarctica, 2007 to 2009",
+    x = "Flipper length (mm)", y = "Body mass (g)", color = NULL,
+    caption = "Data: palmerpenguins"
+  )
+```
+
+Then `theme_brand()` applies a brand. `fetch_fonts = TRUE` downloads the
+brand's Google fonts for the session, so the figure is drawn in the right
+typeface even on a machine that doesn't have it installed.
+
+```{r}
+p |> theme_brand("brands/ledger.yml", fetch_fonts = TRUE)
+```
+
+```{r}
+#| echo: false
+vg(theme_brand(p, "brands/ledger.yml", fetch_fonts = TRUE), "brand-ledger")
+```
+
+How the parts of the brand file are used:
+
+- `background` becomes the page and `foreground` the ink of titles, text and
+  unmapped marks. The greys of grid lines and tick labels are mixes of the two,
+  so they suit any pair of colours.
+- `color.palette`, in file order, becomes the default colours for a discrete
+  scale. A scale with its own colours still wins.
+- `typography.base` sets the text font and `headings` the title font, each at
+  its own weight. Ledger asks for light body text (300); tick labels, legend
+  text and axis titles keep at least a regular weight so they stay readable at
+  small sizes.
+
+## The same plot, two more brands
+
+```{r}
+p |> theme_brand("brands/harbour.yml", fetch_fonts = TRUE)
+p |> theme_brand("brands/midnight.yml", fetch_fonts = TRUE)
+```
+
+```{r}
+#| echo: false
+vg(theme_brand(p, "brands/harbour.yml", fetch_fonts = TRUE), "brand-harbour")
+vg(theme_brand(p, "brands/midnight.yml", fetch_fonts = TRUE), "brand-midnight")
+```
+
+## Every plot in a document
+
+In a Quarto project with a `_brand.yml`, one option brands every plot that
+does not set a theme of its own. vellumplot reads the brand Quarto has already
+resolved for the document, including a dark brand if you ask for one with
+`mode = "dark"`, and says once which file it used.
+
+```{r}
+#| eval: false
+options(
+  vellumplot.brand = TRUE,             # or a path to a brand file
+  vellumplot.brand.fetch_fonts = TRUE  # download missing brand fonts
+)
+```
+
+The option is off by default, and a plot with an explicit theme such as
+`theme_bw()` keeps it. A composition with no theme of its own takes its page
+from its plots, so branded plots composed side by side share one background.
+
+```{r}
+counts <- as.data.frame(table(island = pen$island, species = pen$species))
+counts <- counts[counts$Freq > 0, ]
+
+bars <- vplot(counts, width = 3.6, height = 4.4) |>
+  mark_bar(x = island, y = Freq, fill = species, stat = "identity") |>
+  labs(title = "Where they live", x = NULL, y = "Penguins", fill = NULL)
+
+brand <- "brands/midnight.yml"
+both <- hconcat(
+  theme_brand(p, brand, fetch_fonts = TRUE) |> labs(caption = NULL),
+  theme_brand(bars, brand)
+)
+```
+
+```{r}
+#| echo: false
+vg(both, "brand-composed")
+```
